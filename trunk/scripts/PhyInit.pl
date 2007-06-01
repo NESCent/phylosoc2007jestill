@@ -19,6 +19,7 @@
 #                                                           |
 # LICENSE:                                                  |
 #  GNU Lesser Public License                                |
+#  http://www.gnu.org/licenses/lgpl.html                    |  
 #                                                           |
 #-----------------------------------------------------------+
 #
@@ -26,8 +27,8 @@
 # WARRANTY. USE AT YOUR OWN RISK.
 
 # TO DO:
-# - Create the non-phylo components of BioSQL
-# - 
+# - Create the non-phylo tables components of BioSQL
+# - Run appropriate SQL code in sqldir
 
 # NOTE: Variables from command line follow load_ncbi_taxonomy.pl
 
