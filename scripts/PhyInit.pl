@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 05/30/2007                                       |
-# UPDATED: 05/31/2007                                       |
+# UPDATED: 06/01/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Initialize a BioSQL database with the phyloinformatics   |
@@ -41,6 +41,7 @@ PhyInit.pl - Initialize a phyloinformatics database.
         --quiet      # Run the program in quiet mode.
         --sqldir     # SQL Dir that contains the SQL to create tables
                    
+
 =head1 DESCRIPTION
 
 Initialize a BioSQL database with the phyloinformatics tables. This will
@@ -100,9 +101,9 @@ and the user will not be prompted for intput.
 
 James C. Estill E<lt>JamesEstill at gmail.comE<gt>
 
-Hilmar Lapp, E<lt>hlapp at gmx.net, 2007E<gt>
+Hilmar Lapp, E<lt>hlapp at gmx.netE<gt>
 
-Bill Piel, E<lt>william.piel at yale.edu, 2007E<gt>
+Bill Piel, E<lt>william.piel at yale.eduE<gt>
 
 =cut
 
@@ -446,11 +447,36 @@ sub DoesTableExist
 }
 
 
+sub HowManyRecords
+{
+#-----------------------------+
+# COUNT HOW MANY RECORDS      |
+# EXIST IN THE MYSQL TABLE    |
+#-----------------------------+
+# CODE FROM
+# http://lena.franken.de/perl_hier/databases.html
+
+    my ($dbh, $whichtable) = @_;
+    #my ($whichtable) = @_;
+    my ($result,$cur,$sql,@row);
+
+    $sql = "select count(*) from $whichtable";
+    $cur = $dbh->prepare($sql);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    $result=$row[0];
+    $cur->finish();
+    return $result;
+
+}
+
+
+
 =head1 HISTORY
 
 Started: 05/30/2007
 
-Updated: 05/31/2007
+Updated: 06/01/2007
 
 =cut
 
@@ -471,4 +497,6 @@ Updated: 05/31/2007
 # - Added parse of dsn string to: $db, $host, $driver 
 # - Added H. Lapp and W. Piel as authors since I am using 
 #   the SQL they created at the hackathon
-# - Added SQL for table creation of phylo tables
+# - Added SQL for creation of phylo tables
+# 06/01/2007
+# - Added the HowManyRecords subfunction
