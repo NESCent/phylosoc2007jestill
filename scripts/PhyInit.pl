@@ -39,6 +39,7 @@ PhyInit.pl - Initialize a phyloinformatics database.
         --host       # optional: host to connect with
         --help       # Print this help message
         --quiet      # Run the program in quiet mode.
+        --sqldir     # SQL Dir that contains the SQL to create tables
                    
 =head1 DESCRIPTION
 
@@ -99,6 +100,10 @@ and the user will not be prompted for intput.
 
 James C. Estill E<lt>JamesEstill at gmail.comE<gt>
 
+Hilmar Lapp, E<lt>hlapp at gmx.net, 2007E<gt>
+
+Bill Piel, E<lt>william.piel at yale.edu, 2007E<gt>
+
 =cut
 
 #-----------------------------+
@@ -118,6 +123,8 @@ my $db;                        # Database name (ie. biosql)
 my $host;                      # Database host (ie. localhost)
 my $driver;                    # Database driver (ie. mysql)
 my $help = 0;                  # Display help
+my $sqldir;                    # Directory that contains the sql to run
+                               # to create the tables.
 my $quiet = 0;                 # Run the program in quiet mode
                                # will not prompt for command line options
 
@@ -127,6 +134,7 @@ my $quiet = 0;                 # Run the program in quiet mode
 my $ok = GetOptions("d|dsn=s"    => \$dsn,
                     "u|dbuser=s" => \$usrname,
                     "p|dbpass=s" => \$pass,
+		    "s|sqldir=s" => \$sqldir,
 		    "driver=s"   => \$driver,
 		    "dbname=s"   => \$db,
 		    "host=s"     => \$host,
@@ -202,12 +210,101 @@ if ($driver =~ "mysql") {
 #-----------------------------+
 my $dbh = &ConnectToDb($dsn, $usrname, $pass);
 
-
 #-----------------------------+
 # CHECK FOR EXISTENCE OF      |
 # PHYLO TABLES AND CREATE IF  |
 # NEEDED                      |
 #-----------------------------+
+# If the sqldir is passed, then use the SQL there. However
+# I decided to also do this as SQL statements within PERL 
+# since that is the way I like to do things. JCE
+
+# CHECK FOR EXISTENCE OF TABLES AND WARN USER THAT
+# THE DATA IN THE EXISTING TABLES WILL BE LOST
+# This provides a place for the user to back out before
+# trashing any hard work that may be stored in existing tables.
+my @TblList = ("tree",
+	       "node",
+	       "edge",
+	       "node_path",
+	       "edge_attribute_value",
+	       "node_attribute_value"
+	       );
+
+my @Tbl2Del; # Tables that need to be deleted will be pushed to this list
+
+
+
+# Warn the user if they want to procede
+
+
+
+unless ($sqldir)
+{
+    # All SQL copied from biosql-phylodb-mysql.pl
+
+    
+    # TREE TABLE
+    my $CreateTree = "CREATE TABLE tree (".
+	" tree_id INTEGER NOT NULL auto_increment,".
+	" name VARCHAR(32) NOT NULL,".
+	" identifier VARCHAR(16),".
+	" node_id INTEGER NOT NULL,".
+	" PRIMARY KEY (tree_id),".
+	" UNIQUE (name)".
+	" );";
+
+    # NODES
+    my $CreateNode = "CREATE TABLE node (".
+	" node_id INTEGER NOT NULL auto_increment,".
+	" label VARCHAR(255),".
+	" tree_id INTEGER NOT NULL,".
+	" gene_id INTEGER,".
+	" taxon_id INTEGER,".
+	" left_idx INTEGER,".
+	" right_idx INTEGER,".
+	" PRIMARY KEY (node_id),".
+	" UNIQUE (label,tree_id),".
+	" UNIQUE (left_idx,tree_id),".
+	" UNIQUE (right_idx,tree_id)".
+	" );";
+
+    # EDGES
+    my $CreateEdge = "CREATE TABLE edge (".
+	" edge_id INTEGER NOT NULL auto_increment,".
+	" child_node_id INTEGER NOT NULL,".
+	" parent_node_id INTEGER NOT NULL,".
+	" PRIMARY KEY (edge_id),".
+	" UNIQUE (child_node_id,parent_node_id)".
+	" );";
+
+    # NODE PATH -- Transitive closure over edges between nodes
+    my $CreateNodePath = "CREATE TABLE node_path (".
+	" child_node_id INTEGER NOT NULL,".
+	" parent_node_id INTEGER NOT NULL,".
+	" path TEXT,".
+	" distance INTEGER,".
+	" PRIMARY KEY (child_node_id,parent_node_id,distance)".
+	" );";
+    
+    # EDGE ATTRIBUTES
+    my $CreateEdgeAtt = "CREATE TABLE edge_attribute_value (".
+	" value text,".
+	" edge_id INTEGER NOT NULL,".
+	" term_id INTEGER NOT NULL,".
+	" UNIQUE (edge_id,term_id)".
+	" );";
+
+    # NODE ATTRIBUTE VALUES
+    my $CreateNodeAtt = "CREATE TABLE node_attribute_value (".
+	" value text,".
+	" node_id INTEGER NOT NULL,".
+	" term_id INTEGER NOT NULL,".
+	" UNIQUE (node_id,term_id)".
+	" );";   
+
+} # End of Unless $sqldir
+
 
 
 exit;
@@ -360,11 +457,11 @@ Updated: 05/31/2007
 #-----------------------------------------------------------+
 # HISTORY                                                   |
 #-----------------------------------------------------------+
-# 05/30/2007
+# 05/30/2007 - JCE
 # - Started PhyInit.pl
 # - Pod documentation started
 # - Begin the database connection code
-# 05/31/2007
+# 05/31/2007 - JCE
 # - Modified command line
 # - Added code to create dsn if not provided at command line
 # - Added password input with echo off for security
@@ -372,3 +469,6 @@ Updated: 05/31/2007
 # - Added UserFeedback subfunction
 # - Added DoesTableExist subfunction
 # - Added parse of dsn string to: $db, $host, $driver 
+# - Added H. Lapp and W. Piel as authors since I am using 
+#   the SQL they created at the hackathon
+# - Added SQL for table creation of phylo tables
