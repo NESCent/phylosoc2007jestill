@@ -191,11 +191,12 @@ unless ($pass) {
 }
 
 # Show variables for debug
-print "USER:\t$usrname\n";
-print "DRIVER:\t$driver\n";
-print "HOST:\t$host\n";
-print "DB:\t$db\n";
-print "DSN:\t$dsn\n";
+print "DEBUG INFO\n";
+print "\tUSER:\t$usrname\n";
+print "\tDRIVER:\t$driver\n";
+print "\tHOST:\t$host\n";
+print "\tDB:\t$db\n";
+print "\tDSN:\t$dsn\n";
 
 #-----------------------------+
 # CREATE DATABASE IF NEEDED   |
@@ -232,19 +233,43 @@ my @TblList = ("tree",
 	       "node_attribute_value"
 	       );
 
-my @Tbl2Del; # Tables that need to be deleted will be pushed to this list
+my @Tbl2Del;     # Tables that need to be deleted will be pushed to this list
+my $Num2Del = 0; # The number of tables that will be deleted 
+my $DelInfo = "";     # Info on the 
 
+# DETERMINE IF ANY TABLES WOULD NEED TO BE DELETED
+foreach my $Tbl (@TblList) {
+    if (&DoesTableExist($dbh, $Tbl)) {
+	#print "The table $tblQryCat already exits.\n";
+	$Num2Del++;
+	push @Tbl2Del, $Tbl;
+	my $NumRecs = &HowManyRecords($dbh, $Tbl);
+	$DelInfo = $DelInfo."\t".$Tbl."( ".$NumRecs." Records )\n";
+    } # End of DoesTableExist
+} # End of for each individual table
 
+# WARN THE USER 
+if ($Num2Del > 0) {
 
-# Warn the user if they want to procede
+    print "\nThe following tables will be deleted:\n";
+    print $DelInfo;
+    my $question = "Do you want to delete the existing tables?";
+    my $answer = &UserFeedback($question);
 
+    if ($answer =~ "n"){
+	exit;
+    } else {
+	foreach my $Tbl (@Tbl2Del){
+	    $dbh->do("DROP TABLE ".$Tbl);
+	} # End of foreach $Tbl
+    } # End of if answer 
 
+} # End of Num2Del > 0
 
 unless ($sqldir)
 {
     # All SQL copied from biosql-phylodb-mysql.pl
 
-    
     # TREE TABLE
     my $CreateTree = "CREATE TABLE tree (".
 	" tree_id INTEGER NOT NULL auto_increment,".
@@ -254,6 +279,7 @@ unless ($sqldir)
 	" PRIMARY KEY (tree_id),".
 	" UNIQUE (name)".
 	" );";
+    $dbh->do($CreateTree);
 
     # NODES
     my $CreateNode = "CREATE TABLE node (".
@@ -269,6 +295,7 @@ unless ($sqldir)
 	" UNIQUE (left_idx,tree_id),".
 	" UNIQUE (right_idx,tree_id)".
 	" );";
+    $dbh->do($CreateNode);
 
     # EDGES
     my $CreateEdge = "CREATE TABLE edge (".
@@ -278,6 +305,7 @@ unless ($sqldir)
 	" PRIMARY KEY (edge_id),".
 	" UNIQUE (child_node_id,parent_node_id)".
 	" );";
+    $dbh->do($CreateEdge);
 
     # NODE PATH -- Transitive closure over edges between nodes
     my $CreateNodePath = "CREATE TABLE node_path (".
@@ -287,6 +315,7 @@ unless ($sqldir)
 	" distance INTEGER,".
 	" PRIMARY KEY (child_node_id,parent_node_id,distance)".
 	" );";
+    $dbh->do($CreateNodePath);
     
     # EDGE ATTRIBUTES
     my $CreateEdgeAtt = "CREATE TABLE edge_attribute_value (".
@@ -295,6 +324,7 @@ unless ($sqldir)
 	" term_id INTEGER NOT NULL,".
 	" UNIQUE (edge_id,term_id)".
 	" );";
+    $dbh->do($CreateEdgeAtt);
 
     # NODE ATTRIBUTE VALUES
     my $CreateNodeAtt = "CREATE TABLE node_attribute_value (".
@@ -302,11 +332,75 @@ unless ($sqldir)
 	" node_id INTEGER NOT NULL,".
 	" term_id INTEGER NOT NULL,".
 	" UNIQUE (node_id,term_id)".
-	" );";   
+	" );";
+    $dbh->do($CreateNodeAtt);
+
+    # SET FOREIGN KEYS CONSTRAINTS
+    my $SetKey;
+    
+    $SetKey = "ALTER TABLE tree ADD CONSTRAINT FKnode".
+	" FOREIGN KEY (node_id) REFERENCES node (node_id)";
+#      Is the following PG-SQL
+#	" DEFERRABLE INITIALLY DEFERRED;"; 
+    $dbh->do($SetKey);
+    
+    $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_tree".
+	" FOREIGN KEY (tree_id) REFERENCES tree (tree_id);";
+    $dbh->do($SetKey);
+
+    $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_bioentry".
+	" FOREIGN KEY (gene_id) REFERENCES bioentry (bioentry_id);";
+    $dbh->do($SetKey);
+
+    $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_taxon".
+	" FOREIGN KEY (taxon_id) REFERENCES taxon (taxon_id);".
+    $dbh->do($SetKey);
+
+    $SetKey = "ALTER TABLE edge ADD CONSTRAINT FKedge_child".
+	" FOREIGN KEY (child_node_id) REFERENCES node (node_id)".
+	" ON DELETE CASCADE;";
+    $dbh->do($SetKey);
+    
+    $SetKey = "ALTER TABLE edge ADD CONSTRAINT FKedge_parent".
+	" FOREIGN KEY (parent_node_id) REFERENCES node (node_id)".
+	" ON DELETE CASCADE;";
+    $dbh->do($SetKey);
+
+    $SetKey = "ALTER TABLE node_path ADD CONSTRAINT FKnpath_child".
+	" FOREIGN KEY (child_node_id) REFERENCES node (node_id)".
+	" ON DELETE CASCADE;";
+    $dbh->do($SetKey);
+
+    $SetKey = "ALTER TABLE node_path ADD CONSTRAINT FKnpath_parent".
+	" FOREIGN KEY (parent_node_id) REFERENCES node (node_id)".
+	" ON DELETE CASCADE;";
+    $dbh->do($SetKey);
+
+    $SetKey = "ALTER TABLE edge_attribute_value ADD CONSTRAINT FKeav_edge".
+	" FOREIGN KEY (edge_id) REFERENCES edge (edge_id)".
+	" ON DELETE CASCADE;";
+    $dbh->do($SetKey);
+
+    $SetKey = "ALTER TABLE edge_attribute_value ADD CONSTRAINT FKeav_term".
+	" FOREIGN KEY (term_id) REFERENCES term (term_id);";
+    $dbh->do($SetKey);
+
+    $SetKey = "ALTER TABLE node_attribute_value ADD CONSTRAINT FKnav_node".
+	" FOREIGN KEY (node_id) REFERENCES node (node_id)".
+	" ON DELETE CASCADE;";
+    $dbh->do($SetKey);
+
+    $SetKey = "ALTER TABLE node_attribute_value ADD CONSTRAINT FKnav_term".
+	" FOREIGN KEY (term_id) REFERENCES term (term_id);";
+    $dbh->do($SetKey);
 
 } # End of Unless $sqldir
+# If sqldir is provided, then just create based on that
+# This is better for maintenance since only the SQL
+# code would need to be modified
 
-
+# PRINT EXIT STATUS
+print "\nThe database $db has been initialized.\n";
 
 exit;
 
@@ -500,3 +594,8 @@ Updated: 06/01/2007
 # - Added SQL for creation of phylo tables
 # 06/01/2007
 # - Added the HowManyRecords subfunction
+# - Added code to check for table existence and number
+#   of records that would be deleted. User can choose
+#   not to delete
+# - Added SQL for adding foreign key constraints to
+#   phylo tables 
