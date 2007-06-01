@@ -19,7 +19,10 @@
 #  http://www.gnu.org/licenses/lgpl.html                    |  
 #                                                           |
 #-----------------------------------------------------------+
-
+#
+# Much of this has been copied and pasted from PhyInit.pl 
+# so this will need to be changed.
+# 
 =head1 NAME 
 
 PhyInit.pl - Import phylogenetic trees from common file formats
@@ -35,8 +38,6 @@ PhyInit.pl - Import phylogenetic trees from common file formats
         --host       # optional: host to connect with
         --help       # Print this help message
         --quiet      # Run the program in quiet mode.
-        --sqldir     # SQL Dir that contains the SQL to create tables
-                   
 
 =head1 DESCRIPTION
 
@@ -116,6 +117,8 @@ use Getopt::Long;
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
 my $dsn = $ENV{DBI_DSN};       # DSN for database connection
+my $infile;                    # Full path to the input file to parse
+my $format = "nex";            # Data format used in infile
 my $db;                        # Database name (ie. biosql)
 my $host;                      # Database host (ie. localhost)
 my $driver;                    # Database driver (ie. mysql)
@@ -130,6 +133,8 @@ my $quiet = 0;                 # Run the program in quiet mode
 #-----------------------------+
 my $ok = GetOptions("d|dsn=s"    => \$dsn,
                     "u|dbuser=s" => \$usrname,
+                    "i|infile=s" => \$infile,
+                    "f|format=s" => \$format,
                     "p|dbpass=s" => \$pass,
 		    "s|sqldir=s" => \$sqldir,
 		    "driver=s"   => \$driver,
@@ -138,6 +143,39 @@ my $ok = GetOptions("d|dsn=s"    => \$dsn,
 		    "q|quiet"    => \$quiet,
 		    "h|help"     => \$help);
 
+# SHOW HELP
+if($help || (!$ok)) {
+    system("perldoc $0");
+    exit($ok ? 0 : 2);
+}
+
+
+# A full dsn can be passed at the command line or components
+# can be put together
+unless ($dsn) {
+    # Set default values if none given at command line
+    $db = "biosql" unless $db; 
+    $host = "localhost" unless $host;
+    $driver = "mysql" unless $driver;
+    $dsn = "DBI:$driver:database=$db;host=$host";
+} else {
+    # We need to parse the database name, driver etc from the dsn string
+    # in the form of DBI:$driver:database=$db;host=$host
+    # Other dsn strings will not be parsed properly
+    # Split commands are often faster then regular expressions
+    # However, a regexp may offer a more stable parse then splits do
+    my ($cruft, $prefix, $suffix, $predb, $prehost); 
+    ($prefix, $driver, $suffix) = split(/:/,$dsn);
+    ($predb, $prehost) = split(/;/, $suffix);
+    ($cruft, $db) = split(/=/,$predb);
+    ($cruft, $host) = split(/=/,$prehost);
+    # Print for debug
+    print "\tPRE:\t$prefix\n";
+    print "\tDRIVER:\t$driver\n";
+    print "\tSUF:\t$suffix\n";
+    print "\tDB:\t$db\n";
+    print "\tHOST:\t$host\n";
+}
 
 
 
