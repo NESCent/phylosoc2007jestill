@@ -17,10 +17,17 @@
 #  initially assume that BioSQL already exists, and will    |
 #  just add the phyloinforamtics tables                     |
 #                                                           |
+# LICENSE:                                                  |
+#  GNU Lesser Public License                                |
+#                                                           |
 #-----------------------------------------------------------+
 #
 # THIS SOFTWARE COMES AS IS, WITHOUT ANY EXPRESS OR IMPLIED
 # WARRANTY. USE AT YOUR OWN RISK.
+
+# TO DO:
+# - Create the non-phylo components of BioSQL
+# - 
 
 # NOTE: Variables from command line follow load_ncbi_taxonomy.pl
 
@@ -52,6 +59,15 @@ available with the driver argument.
 
 =over
 
+=item -d, --dsn
+
+the DSN of the database to connect to; default is the value in the
+environment variable DBI_DSN. If DBI_DSN has not been defined and
+the string is not passed to the command line, the dsn will be 
+constructed from --driver, --dbname, --host
+
+Example: DBI:mysql:database=biosql;host=localhost
+
 =item -u, --dbuser
 
 The user name to connect with; default is the value in the environment
@@ -62,16 +78,8 @@ This user must have permission to create databases.
 =item -p, --dbpass
 
 password to connect with; default is the value in the environment
-variable DBI_PASSWORD
-
-=item -d, --dsn
-
-the DSN of the database to connect to; default is the value in the
-environment variable DBI_DSN. If DBI_DSN has not been defined and
-the string is not passed to the command line, the dsn will be 
-constructed from --driver, --dbname, --host
-
-Example: DBI:mysql:database=biosql;host=localhost
+variable DBI_PASSWORD. If this is not provided at the command line
+the user is prompted.
 
 =item --host
 
@@ -592,7 +600,7 @@ Updated: 06/01/2007
 # - Added H. Lapp and W. Piel as authors since I am using 
 #   the SQL they created at the hackathon
 # - Added SQL for creation of phylo tables
-# 06/01/2007
+# 06/01/2007 - JCE
 # - Added the HowManyRecords subfunction
 # - Added code to check for table existence and number
 #   of records that would be deleted. User can choose
