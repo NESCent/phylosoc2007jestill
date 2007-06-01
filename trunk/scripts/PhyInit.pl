@@ -52,7 +52,7 @@ available with the driver argument.
 
 =item -u, --dbuser
 
-The user name to connect to; default is the value in the environment
+The user name to connect with; default is the value in the environment
 variable DBI_USER.
 
 This user must have permission to create databases.
@@ -149,6 +149,21 @@ unless ($dsn) {
     $dsn = "DBI:$driver:database=$db;host=$host";
 } else {
     # We need to parse the database name, driver etc from the dsn string
+    # in the form of DBI:$driver:database=$db;host=$host
+    # Other dsn strings will not be parsed properly
+    # Split commands are often faster then regular expressions
+    # However, a regexp may offer a more stable parse then splits do
+    my ($cruft, $prefix, $suffix, $predb, $prehost); 
+    ($prefix, $driver, $suffix) = split(/:/,$dsn);
+    ($predb, $prehost) = split(/;/, $suffix);
+    ($cruft, $db) = split(/=/,$predb);
+    ($cruft, $host) = split(/=/,$prehost);
+    # Print for debug
+    print "\tPRE:\t$prefix\n";
+    print "\tDRIVER:\t$driver\n";
+    print "\tSUF:\t$suffix\n";
+    print "\tDB:\t$db\n";
+    print "\tHOST:\t$host\n";
 }
 
 #-----------------------------+
@@ -167,7 +182,10 @@ unless ($pass) {
 }
 
 # Show variables for debug
-print "USR:\t$usrname\n";
+print "USER:\t$usrname\n";
+print "DRIVER:\t$driver\n";
+print "HOST:\t$host\n";
+print "DB:\t$db\n";
 print "DSN:\t$dsn\n";
 
 #-----------------------------+
@@ -353,3 +371,4 @@ Updated: 05/31/2007
 # - Added CreateMySQLDB subfunction
 # - Added UserFeedback subfunction
 # - Added DoesTableExist subfunction
+# - Added parse of dsn string to: $db, $host, $driver 
