@@ -185,6 +185,13 @@ if ($driver =~ "mysql") {
 my $dbh = &ConnectToDb($dsn, $usrname, $pass);
 
 
+#-----------------------------+
+# CHECK FOR EXISTENCE OF      |
+# PHYLO TABLES AND CREATE IF  |
+# NEEDED                      |
+#-----------------------------+
+
+
 exit;
 
 #-----------------------------------------------------------+
@@ -301,6 +308,29 @@ sub UserFeedback
     
 } # End of UserFeedback subfunction
 
+sub DoesTableExist
+{
+#-----------------------------+
+# CHECK IF THE MYSQL TABLE    |
+# ALREADY EXISTS              |
+#-----------------------------+
+# CODE FROM
+# http://lena.franken.de/perl_hier/databases.html
+# Makes use of global database handle dbh
+
+    my ($dbh, $whichtable) = @_;
+    #my ($whichtable) = @_;
+    my ($table,@alltables,$found);
+    @alltables = $dbh->tables();
+    $found = 0;
+    foreach $table (@alltables) {
+	$found=1 if ($table eq "`".$whichtable."`");
+    }
+    # return true if table was found, false if table was not found
+    return $found;
+}
+
+
 =head1 HISTORY
 
 Started: 05/30/2007
@@ -322,3 +352,4 @@ Updated: 05/31/2007
 # - Added password input with echo off for security
 # - Added CreateMySQLDB subfunction
 # - Added UserFeedback subfunction
+# - Added DoesTableExist subfunction
