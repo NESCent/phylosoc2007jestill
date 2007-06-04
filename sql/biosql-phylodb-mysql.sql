@@ -15,8 +15,7 @@
 --
 -- comments to biosql - biosql-l@open-bio.org
 
--- Jamie made a few changes to make htis work in MySQL these may not
--- be correct, but it loaded in MySQL without errors 
+-- Jamie made a few changes to make this work in MySQL
 
 -- the tree - conceptually equal to a namespace (a way to scope nodes and edges)
 CREATE TABLE tree (
