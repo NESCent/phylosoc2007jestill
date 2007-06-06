@@ -316,11 +316,6 @@ unless ($sqldir)
     $AddIndex = "CREATE INDEX node_node_id ON tree(node_id);";
     $dbh->do($AddIndex);
 
-    # The following may not be necessary since tree_id is
-    # a PRIMARY KEY, but I will put it here for now
-#    $AddIndex = "CREATE INDEX tree_tree_id ON tree(tree_id)";
-#    $dbh->do($AddIndex);
-    
     #-----------------------------+
     # NODE                        |
     #-----------------------------+
@@ -329,7 +324,6 @@ unless ($sqldir)
 	" node_id INT(10) UNSIGNED NOT NULL auto_increment,".
 	" label VARCHAR(255),".
 	" tree_id INT(10) UNSIGNED NOT NULL,".
-#	" gene_id INTEGER,".
 	" gene_id INT(10) UNSIGNED,".
 	" taxon_id INT(10) UNSIGNED,".
 	" left_idx INT(10) UNSIGNED,".
@@ -341,9 +335,6 @@ unless ($sqldir)
 	" ) TYPE=INNODB;";
     $dbh->do($CreateNode);
     
-    $AddIndex = "CREATE INDEX node_node_id ON node(node_id);";
-    $dbh->do($AddIndex);
-
     $AddIndex = "CREATE INDEX node_tree_id ON node(tree_id);";
     $dbh->do($AddIndex);
 
