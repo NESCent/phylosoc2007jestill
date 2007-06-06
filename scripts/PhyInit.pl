@@ -302,10 +302,10 @@ unless ($sqldir)
     # TREE TABLE                  |
     #-----------------------------+ 
     my $CreateTree = "CREATE TABLE tree (".
-	" tree_id INTEGER NOT NULL auto_increment,".
+	" tree_id INT(10) UNSIGNED NOT NULL auto_increment,".
 	" name VARCHAR(32) NOT NULL,".
 	" identifier VARCHAR(16),".
-	" node_id INTEGER NOT NULL,".
+	" node_id INT(10) UNSIGNED NOT NULL,".
 	" PRIMARY KEY (tree_id),".
 	" UNIQUE (name)".
 	" ) TYPE=INNODB;";
@@ -326,14 +326,14 @@ unless ($sqldir)
     #-----------------------------+
     print "Creating table: node\n";
     my $CreateNode = "CREATE TABLE node (".
-	" node_id INTEGER NOT NULL auto_increment,".
+	" node_id INT(10) UNSIGNED NOT NULL auto_increment,".
 	" label VARCHAR(255),".
-	" tree_id INTEGER NOT NULL,".
+	" tree_id INT(10) UNSIGNED NOT NULL,".
 #	" gene_id INTEGER,".
 	" gene_id INT(10) UNSIGNED,".
-	" taxon_id INTEGER,".
-	" left_idx INTEGER,".
-	" right_idx INTEGER,".
+	" taxon_id INT(10) UNSIGNED,".
+	" left_idx INT(10) UNSIGNED,".
+	" right_idx INT(10) UNSIGNED,".
 	" PRIMARY KEY (node_id),".
 	" UNIQUE (label,tree_id),".
 	" UNIQUE (left_idx,tree_id),".
@@ -358,51 +358,64 @@ unless ($sqldir)
     #-----------------------------+
     print "Creating table: edge\n";
     my $CreateEdge = "CREATE TABLE edge (".
-	" edge_id INTEGER NOT NULL auto_increment,".
-	" child_node_id INTEGER NOT NULL,".
-	" parent_node_id INTEGER NOT NULL,".
+	" edge_id INT(10) UNSIGNED NOT NULL auto_increment,".
+	" child_node_id INT(10) UNSIGNED NOT NULL,".
+	" parent_node_id INT(10) UNSIGNED NOT NULL,".
 	" PRIMARY KEY (edge_id),".
 	" UNIQUE (child_node_id,parent_node_id)".
 	" ) TYPE=INNODB;";
     $dbh->do($CreateEdge);
 
+    $AddIndex = "CREATE INDEX edge_parent_node_id ON edge(parent_node_id)";
+    $dbh->do($AddIndex);
+    
     #-----------------------------+
     # NODE PATH                   |
     #-----------------------------+
     print "Creating table: node_path\n";
     #Transitive closure over edges between nodes
     my $CreateNodePath = "CREATE TABLE node_path (".
-	" child_node_id INTEGER NOT NULL,".
-	" parent_node_id INTEGER NOT NULL,".
+	" child_node_id INT(10) UNSIGNED NOT NULL,".
+	" parent_node_id INT(10) UNSIGNED NOT NULL,".
 	" path TEXT,".
 	" distance INTEGER,".
 	" PRIMARY KEY (child_node_id,parent_node_id,distance)".
 	" ) TYPE=INNODB;";
     $dbh->do($CreateNodePath);
-    
+
+    $AddIndex = "CREATE INDEX node_path_parent_node_id ON".
+	" node_path(parent_node_id)";
+    $dbh->do($AddIndex);
+
     #-----------------------------+
     # EDGE ATTRIBUTES             |
     #-----------------------------+
     print "Creating table: edge_attribute_value\n";
     my $CreateEdgeAtt = "CREATE TABLE edge_attribute_value (".
 	" value text,".
-	" edge_id INTEGER NOT NULL,".
-	" term_id INTEGER NOT NULL,".
+	" edge_id INT(10) UNSIGNED NOT NULL,".
+	" term_id INT(10) UNSIGNED NOT NULL,".
 	" UNIQUE (edge_id,term_id)".
 	" ) TYPE=INNODB;";
     $dbh->do($CreateEdgeAtt);
 
+    $AddIndex = "CREATE INDEX ea_val_term_id ON edge_attribute_value(term_id)";
+    $dbh->do($AddIndex);
+    
     #-----------------------------+
     # NODE ATTRIBUTE VALUES       |
     #-----------------------------+
     print "Creating table: node_attribute_value\n";
     my $CreateNodeAtt = "CREATE TABLE node_attribute_value (".
 	" value text,".
-	" node_id INTEGER NOT NULL,".
-	" term_id INTEGER NOT NULL,".
+	" node_id INT(10) UNSIGNED NOT NULL,".
+	" term_id INT(10) UNSIGNED NOT NULL,".
 	" UNIQUE (node_id,term_id)".
 	" ) TYPE=INNODB;";
     $dbh->do($CreateNodeAtt);
+
+    $AddIndex = "CREATE INDEX na_val_term_id ON node_attribute_value(term_id)";
+    $dbh->do($AddIndex);
 
     #-----------------------------+
     # SET FOREIGN KEY CONSTRAINTS |
@@ -440,7 +453,7 @@ unless ($sqldir)
     $dbh->do($SetKey);
 
     $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_taxon".
-	" FOREIGN KEY (taxon_id) REFERENCES taxon (taxon_id);".
+	" FOREIGN KEY (taxon_id) REFERENCES taxon (taxon_id);";
     $dbh->do($SetKey);
 
     $SetKey = "ALTER TABLE edge ADD CONSTRAINT FKedge_child".
@@ -692,3 +705,4 @@ Updated: 06/06/2007
 # - Added SET FOREIGN_KEY_CHECKS=0 to DROP TABLE CODE
 # - Added indexes to the InnoDB tables to allow foreign
 #   key constraints to work
+# - Changed all INTEGER table values to INT(10) UNSIGNED
