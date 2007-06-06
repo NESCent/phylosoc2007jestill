@@ -25,7 +25,7 @@ CREATE TABLE tree (
        node_id INTEGER NOT NULL -- startpoint of tree
        , PRIMARY KEY (tree_id)
        , UNIQUE (name)
-);
+) TYPE=INNODB;
 
 -- nodes in a tree
 CREATE TABLE node (
@@ -40,7 +40,7 @@ CREATE TABLE node (
        , UNIQUE (label,tree_id)
        , UNIQUE (left_idx,tree_id)
        , UNIQUE (right_idx,tree_id)
-);
+) TYPE=INNODB;
 
 -- edges between nodes
 CREATE TABLE edge (
@@ -49,7 +49,7 @@ CREATE TABLE edge (
        parent_node_id INTEGER NOT NULL
        , PRIMARY KEY (edge_id)
        , UNIQUE (child_node_id,parent_node_id)
-);       
+) TYPE=INNODB;       
 
 -- transitive closure over edges between nodes
 CREATE TABLE node_path (
@@ -58,7 +58,7 @@ CREATE TABLE node_path (
        path TEXT,
        distance INTEGER
        , PRIMARY KEY (child_node_id,parent_node_id,distance)
-);       
+) TYPE=INNODB;       
 
 -- attribute/value pairs for edges
 CREATE TABLE edge_attribute_value (
@@ -66,7 +66,7 @@ CREATE TABLE edge_attribute_value (
        edge_id INTEGER NOT NULL,
        term_id INTEGER NOT NULL
        , UNIQUE (edge_id,term_id)
-);
+) TYPE=INNODB;
 
 -- attribute/value pairs for nodes
 CREATE TABLE node_attribute_value (
@@ -74,7 +74,7 @@ CREATE TABLE node_attribute_value (
        node_id INTEGER NOT NULL,
        term_id INTEGER NOT NULL
        , UNIQUE (node_id,term_id)
-);
+) TYPE=INNODB;
 
 -- The pg below
 --ALTER TABLE tree ADD CONSTRAINT FKnode
