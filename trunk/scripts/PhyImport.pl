@@ -25,7 +25,7 @@
 # 
 =head1 NAME 
 
-PhyInit.pl - Import phylogenetic trees from common file formats
+PhyImport.pl - Import phylogenetic trees from common file formats
 
 =head1 SYNOPSIS
 
@@ -179,11 +179,13 @@ unless ($dsn) {
 
 
 
+
+
 =head1 HISTORY
 
 Started: 05/30/2007
 
-Updated: 06/01/2007
+Updated: 06/05/2007
 
 =cut
 
@@ -192,3 +194,5 @@ Updated: 06/01/2007
 #-----------------------------------------------------------+
 # 06/01/2007 - JCE
 # - Program started
+# 06/05/2007
+# - Updated POD documentation 

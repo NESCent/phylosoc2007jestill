@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 05/30/2007                                       |
-# UPDATED: 06/01/2007                                       |
+# UPDATED: 06/06/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Initialize a BioSQL database with the phyloinformatics   |
@@ -29,6 +29,9 @@
 # TO DO:
 # - Create the non-phylo tables components of BioSQL
 # - Run appropriate SQL code in sqldir
+# - Can run system like
+#   source /home/jestill/cvsloc/biosql-schema/sql/biosqldb-mysql.sql
+#   to establish the SQL schema
 
 # NOTE: Variables from command line follow load_ncbi_taxonomy.pl
 
@@ -265,21 +268,39 @@ if ($Num2Del > 0) {
     my $question = "Do you want to delete the existing tables?";
     my $answer = &UserFeedback($question);
 
-    if ($answer =~ "n"){
+    if ($answer =~ "N"){
+	print "The database was not create and ".
+	    "no changes to the database were made.\n";
+	print "Exiting program\n";
 	exit;
     } else {
+
+	# TURNING OFF FOREIGN KEYS CHECKS IS A TEMP FIX
+	# This allows me to drop tables where 
+	# ON DELTE CASCADE has not been set
+	$dbh->do("SET FOREIGN_KEY_CHECKS=0;");
+
 	foreach my $Tbl (@Tbl2Del){
-	    $dbh->do("DROP TABLE ".$Tbl);
+	    print "Dropping table: $Tbl\n";
+	    my $DropTable = "DROP TABLE $Tbl;";
+	    #$dbh->do("DROP TABLE ".$Tbl." CASCADE;");
+	    $dbh->do( $DropTable );
 	} # End of foreach $Tbl
+
+	$dbh->do("SET FOREIGN_KEY_CHECKS=1;");
+
     } # End of if answer 
 
 } # End of Num2Del > 0
 
 unless ($sqldir)
 {
-    # All SQL copied from biosql-phylodb-mysql.pl
 
-    # TREE TABLE
+    my $AddIndex;       # Var to hold the Add Index statements
+    
+    #-----------------------------+  
+    # TREE TABLE                  |
+    #-----------------------------+ 
     my $CreateTree = "CREATE TABLE tree (".
 	" tree_id INTEGER NOT NULL auto_increment,".
 	" name VARCHAR(32) NOT NULL,".
@@ -287,15 +308,29 @@ unless ($sqldir)
 	" node_id INTEGER NOT NULL,".
 	" PRIMARY KEY (tree_id),".
 	" UNIQUE (name)".
-	" );";
+	" ) TYPE=INNODB;";
     $dbh->do($CreateTree);
+    
+    # Add index to tree(node_id)
+    # Index needed for Foreign Keys in INNODB tables
+    $AddIndex = "CREATE INDEX node_node_id ON tree(node_id);";
+    $dbh->do($AddIndex);
 
-    # NODES
+    # The following may not be necessary since tree_id is
+    # a PRIMARY KEY, but I will put it here for now
+#    $AddIndex = "CREATE INDEX tree_tree_id ON tree(tree_id)";
+#    $dbh->do($AddIndex);
+    
+    #-----------------------------+
+    # NODE                        |
+    #-----------------------------+
+    print "Creating table: node\n";
     my $CreateNode = "CREATE TABLE node (".
 	" node_id INTEGER NOT NULL auto_increment,".
 	" label VARCHAR(255),".
 	" tree_id INTEGER NOT NULL,".
-	" gene_id INTEGER,".
+#	" gene_id INTEGER,".
+	" gene_id INT(10) UNSIGNED,".
 	" taxon_id INTEGER,".
 	" left_idx INTEGER,".
 	" right_idx INTEGER,".
@@ -303,52 +338,82 @@ unless ($sqldir)
 	" UNIQUE (label,tree_id),".
 	" UNIQUE (left_idx,tree_id),".
 	" UNIQUE (right_idx,tree_id)".
-	" );";
+	" ) TYPE=INNODB;";
     $dbh->do($CreateNode);
+    
+    $AddIndex = "CREATE INDEX node_node_id ON node(node_id);";
+    $dbh->do($AddIndex);
 
-    # EDGES
+    $AddIndex = "CREATE INDEX node_tree_id ON node(tree_id);";
+    $dbh->do($AddIndex);
+
+    $AddIndex = "CREATE INDEX node_gene_id ON node(gene_id);";
+    $dbh->do($AddIndex);
+
+    $AddIndex = "CREATE INDEX node_taxon_id ON node(taxon_id);";
+    $dbh->do($AddIndex);
+
+    #-----------------------------+
+    # EDGES                       |
+    #-----------------------------+
+    print "Creating table: edge\n";
     my $CreateEdge = "CREATE TABLE edge (".
 	" edge_id INTEGER NOT NULL auto_increment,".
 	" child_node_id INTEGER NOT NULL,".
 	" parent_node_id INTEGER NOT NULL,".
 	" PRIMARY KEY (edge_id),".
 	" UNIQUE (child_node_id,parent_node_id)".
-	" );";
+	" ) TYPE=INNODB;";
     $dbh->do($CreateEdge);
 
-    # NODE PATH -- Transitive closure over edges between nodes
+    #-----------------------------+
+    # NODE PATH                   |
+    #-----------------------------+
+    print "Creating table: node_path\n";
+    #Transitive closure over edges between nodes
     my $CreateNodePath = "CREATE TABLE node_path (".
 	" child_node_id INTEGER NOT NULL,".
 	" parent_node_id INTEGER NOT NULL,".
 	" path TEXT,".
 	" distance INTEGER,".
 	" PRIMARY KEY (child_node_id,parent_node_id,distance)".
-	" );";
+	" ) TYPE=INNODB;";
     $dbh->do($CreateNodePath);
     
-    # EDGE ATTRIBUTES
+    #-----------------------------+
+    # EDGE ATTRIBUTES             |
+    #-----------------------------+
+    print "Creating table: edge_attribute_value\n";
     my $CreateEdgeAtt = "CREATE TABLE edge_attribute_value (".
 	" value text,".
 	" edge_id INTEGER NOT NULL,".
 	" term_id INTEGER NOT NULL,".
 	" UNIQUE (edge_id,term_id)".
-	" );";
+	" ) TYPE=INNODB;";
     $dbh->do($CreateEdgeAtt);
 
-    # NODE ATTRIBUTE VALUES
+    #-----------------------------+
+    # NODE ATTRIBUTE VALUES       |
+    #-----------------------------+
+    print "Creating table: node_attribute_value\n";
     my $CreateNodeAtt = "CREATE TABLE node_attribute_value (".
 	" value text,".
 	" node_id INTEGER NOT NULL,".
 	" term_id INTEGER NOT NULL,".
 	" UNIQUE (node_id,term_id)".
-	" );";
+	" ) TYPE=INNODB;";
     $dbh->do($CreateNodeAtt);
 
-    # SET FOREIGN KEYS CONSTRAINTS
-    my $SetKey;
-    
+    #-----------------------------+
+    # SET FOREIGN KEY CONSTRAINTS |
+    #-----------------------------+
+    print "Adding Foreign Key Constraints.\n";
+    my $SetKey; # Var to hold the Set Key SQL string
+
+    # May want to add ON DELETE CASCADE to these so
+    # that I can DROP tables later
     $SetKey = "ALTER TABLE tree ADD CONSTRAINT FKnode".
-	" FOREIGN KEY (node_id) REFERENCES node (node_id)";
+	" FOREIGN KEY (node_id) REFERENCES node (node_id);";
 #      Is the following PG-SQL
 #	" DEFERRABLE INITIALLY DEFERRED;"; 
     $dbh->do($SetKey);
@@ -356,7 +421,20 @@ unless ($sqldir)
     $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_tree".
 	" FOREIGN KEY (tree_id) REFERENCES tree (tree_id);";
     $dbh->do($SetKey);
+    
+    #////////////////////////////////
+    # The follwing INDEX
+    # Should be added elsewhere
+    # but put here for now to
+    # make the ALTER TABLE work
+    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+#    $AddIndex = "CREATE INDEX bioentry_bioentry_id".
+#	" ON bioentry(bioentry_id);";
+#    $dbh->do($AddIndex);
 
+
+    # the following will fail because the bioentry_id is INT(10)
+    # while gene_id is INT
     $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_bioentry".
 	" FOREIGN KEY (gene_id) REFERENCES bioentry (bioentry_id);";
     $dbh->do($SetKey);
@@ -579,7 +657,7 @@ sub HowManyRecords
 
 Started: 05/30/2007
 
-Updated: 06/01/2007
+Updated: 06/06/2007
 
 =cut
 
@@ -608,3 +686,9 @@ Updated: 06/01/2007
 #   not to delete
 # - Added SQL for adding foreign key constraints to
 #   phylo tables 
+# 06/06/2007 - JCE
+# - Modified SQL to create InnoDB tables instead of MyISAM 
+#   tables, this will allow for transaction support
+# - Added SET FOREIGN_KEY_CHECKS=0 to DROP TABLE CODE
+# - Added indexes to the InnoDB tables to allow foreign
+#   key constraints to work
