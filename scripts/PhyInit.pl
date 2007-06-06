@@ -435,19 +435,6 @@ unless ($sqldir)
 	" FOREIGN KEY (tree_id) REFERENCES tree (tree_id);";
     $dbh->do($SetKey);
     
-    #////////////////////////////////
-    # The follwing INDEX
-    # Should be added elsewhere
-    # but put here for now to
-    # make the ALTER TABLE work
-    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#    $AddIndex = "CREATE INDEX bioentry_bioentry_id".
-#	" ON bioentry(bioentry_id);";
-#    $dbh->do($AddIndex);
-
-
-    # the following will fail because the bioentry_id is INT(10)
-    # while gene_id is INT
     $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_bioentry".
 	" FOREIGN KEY (gene_id) REFERENCES bioentry (bioentry_id);";
     $dbh->do($SetKey);
