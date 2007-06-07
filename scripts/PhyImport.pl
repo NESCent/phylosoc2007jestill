@@ -102,10 +102,6 @@ and the user will not be prompted for intput.
 
 James C. Estill E<lt>JamesEstill at gmail.comE<gt>
 
-Hilmar Lapp, E<lt>hlapp at gmx.netE<gt>
-
-Bill Piel, E<lt>william.piel at yale.eduE<gt>
-
 =cut
 
 print "Staring PhyImport ..\n";
