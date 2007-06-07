@@ -21,7 +21,8 @@
 CREATE TABLE tree (
        tree_id INT(10) UNSIGNED NOT NULL auto_increment,
        name VARCHAR(32) NOT NULL,
-       identifier VARCHAR(16),
+       identifier VARCHAR(32),
+       is_rooted ENUM ('FALSE', 'TRUE') DEFAULT 'TRUE',	
        node_id INT(10) UNSIGNED NOT NULL -- startpoint of tree
        , PRIMARY KEY (tree_id)
        , UNIQUE (name)
