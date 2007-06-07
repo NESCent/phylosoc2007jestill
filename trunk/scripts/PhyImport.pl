@@ -20,9 +20,13 @@
 #                                                           |
 #-----------------------------------------------------------+
 #
-# Much of this has been copied and pasted from PhyInit.pl 
-# so this will need to be changed.
-# 
+# TO DO:
+# - Update POD documentation
+# - The internal nodes used by TreeI will not be the same
+#   as the nodes used in the database so the DB ID will
+#   need to be fetched when adding edges to the database.
+#
+ 
 =head1 NAME 
 
 PhyImport.pl - Import phylogenetic trees from common file formats
@@ -131,6 +135,9 @@ my $sqldir;                    # Directory that contains the sql to run
                                # to create the tables.
 my $quiet = 0;                 # Run the program in quiet mode
                                # will not prompt for command line options
+my $TreeName;                  # The name of the tree
+                               # For files with multiple trees, this may
+                               # be used as a base name to name the trees with
 
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
@@ -144,6 +151,7 @@ my $ok = GetOptions("d|dsn=s"    => \$dsn,
 		    "driver=s"   => \$driver,
 		    "dbname=s"   => \$db,
 		    "host=s"     => \$host,
+		    "t|tree=s"   => \$TreeName,
 		    "q|quiet"    => \$quiet,
 		    "h|help"     => \$help);
 
@@ -180,6 +188,34 @@ unless ($dsn) {
     print "\tHOST:\t$host\n";
 }
 
+
+#-----------------------------+
+# GET DB PASSWORD             |
+#-----------------------------+
+# This prevents the password from being globally visible
+# I don't know what happens with this in anything but Linux
+# so I may need to get rid of this or modify it 
+# if it crashes on other OS's
+
+# Commented out while I work through fetching the tree structure
+
+#unless ($pass) {
+#    print "\nEnter password for the user $usrname\n";
+#    system('stty', '-echo') == 0 or die "can't turn off echo: $?";
+#    $pass = <STDIN>;
+#    system('stty', 'echo') == 0 or die "can't turn on echo: $?";
+#    chomp $pass;
+#}
+
+
+#-----------------------------+
+# CONNECT TO THE DATABASE     |
+#-----------------------------+
+# Commented out while I work on fetching tree structure
+#my $dbh = &ConnectToDb($dsn, $usrname, $pass);
+
+
+
 #-----------------------------+
 # LOAD THE INPUT FILE         |
 #-----------------------------+
@@ -197,18 +233,77 @@ my $TreeNum = 1;
 while( $tree = $TreeIn->next_tree ) {
     print "PROCESSING TREE NUM: $TreeNum\n";
     
-    # GET THE TAXA
+    #-----------------------------+
+    # TREE NAME                   |
+    #-----------------------------+
+    # If the tree has an id, then use the internal id
+    # otherwise set to a new id. This will also need to
+    # check to see if the id is already used in the database
+    # If there are multiple trees in the database, and no
+    # tree name has already been used, then append the tree num
+    # to the $TreeName variable
+    if ($tree->id) {
+	print $tree->id."\n";
+    } else {
+	$tree->id($TreeName);
+	print "\tNo tree id was given.\n";
+	print "\tTree name set to: ".$tree->id."\n";
+    }
+    
+
+    #-----------------------------+
+    # DETERMINE IF TREE IS ROOTED |
+    #-----------------------------+
+    # IF THE TREE IS ROOTED GET THE ROOT NODE 
+    if ($tree->get_root_node) {
+	my $root = $tree->get_root_node;
+	# If the tree is rooted without an id, show the internal id
+	if ($root->id) {
+	    print "\tROOT:".$root->id."\n";
+	} else {
+	    print "\tROOT INTERNAL ID:".$root->internal_id."\n";
+	}
+    } else {
+	print "The tree is not rooted.\n";
+    }
+    
+    #-----------------------------+
+    # GET THE TAXA                |
+    #-----------------------------+ 
     my @taxa = $tree->get_leaf_nodes;
     my $NumTax = @taxa;
+
+    # Print leaf node names
     print "\tNUM TAX:$NumTax\n";
-    foreach my $IndTaxon (@taxa) {
-	print "\t\t$IndTaxon\n";
+    foreach my $IndNode (@taxa) {
+	print "\t\t".$IndNode->id."\n";
     }
 
+    #-----------------------------+
+    # GET ALL OF THE NODES        |
+    #-----------------------------+
+    # Get nodes and show ancestor
+    my @AllNodes = $tree->get_nodes;
 
-    # GET THE ROOT
-    my $root = $tree->get_root_node;
-    print "\tROOT:$root\n";
+    my $NumNodes = @AllNodes;
+
+    print "\tALL EDGES:\n";
+    foreach my $IndNode (@AllNodes) {
+	
+	# First check to see that an id exists
+	if ($IndNode->id) {
+	    my $anc = $IndNode->ancestor;
+	    
+	    # Only print edges when there is an ancestor node has 
+	    # an id. This 
+	    if ($anc->id) {
+		print "\t\t".$IndNode->id;
+		print "\t--\t";
+		print $anc->id;
+		print "\n";
+	    }
+	} 
+    } # End of for each IndNode
 
     # Increment TreeNum
     $TreeNum++;
@@ -222,6 +317,28 @@ exit;
 #-----------------------------------------------------------+
 # SUBFUNCTIONS                                              |
 #-----------------------------------------------------------+
+
+sub ConnectToDb {
+    my ($cstr) = @_;
+    return ConnectToMySQL(@_) if $cstr =~ /:mysql:/i;
+    return ConnectToPg(@_) if $cstr =~ /:pg:/i;
+    die "can't understand driver in connection string: $cstr\n";
+}
+
+sub ConnectToMySQL {
+    
+    my ($cstr, $user, $pass) = @_;
+    
+    my $dbh = DBI->connect($cstr, 
+			   $user, 
+			   $pass, 
+			   {PrintError => 0, RaiseError => 1});
+    
+    $dbh || &error("DBI connect failed : ",$dbh->errstr);
+    
+    return($dbh);
+}
+
 
 =head1 HISTORY
 
@@ -241,3 +358,7 @@ Updated: 06/07/2007
 # 06/07/2007 - JCE
 # -Adding the ability to read in a tree using Bio::TreeIO;
 #  and Bio::Tree::TreeI;
+# - Get nodes from tree object
+# - Get edges from tree object
+# - Added ConnnectToDb subfunction
+# - Added ConnectToMySQL subfunction
