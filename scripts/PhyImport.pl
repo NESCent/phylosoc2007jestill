@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/01/2007                                       |
-# UPDATED: 06/01/2007                                       |
+# UPDATED: 06/07/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Import NEXUS and Newick files from text files to the     |
@@ -104,12 +104,16 @@ Bill Piel, E<lt>william.piel at yale.eduE<gt>
 
 =cut
 
+print "Staring PhyImport ..\n";
+
 #-----------------------------+
 # INCLUDES                    |
 #-----------------------------+
 use strict;
 use DBI;
 use Getopt::Long;
+use Bio::TreeIO;                # creates Bio::Tree::TreeI objects
+use Bio::Tree::TreeI;
 
 #-----------------------------+
 # VARIABLE SCOPE              |
@@ -149,7 +153,6 @@ if($help || (!$ok)) {
     exit($ok ? 0 : 2);
 }
 
-
 # A full dsn can be passed at the command line or components
 # can be put together
 unless ($dsn) {
@@ -177,15 +180,54 @@ unless ($dsn) {
     print "\tHOST:\t$host\n";
 }
 
+#-----------------------------+
+# LOAD THE INPUT FILE         |
+#-----------------------------+
+print "\nLoading tree...\n";
+
+my $TreeIn = new Bio::TreeIO(-file   => "$infile",
+#			     -format => 'nexus') ||
+			     -format => 'newick') ||
+    die "Can not open tree file:\n$infile";
 
 
+my $tree;
+my $TreeNum = 1;
 
+while( $tree = $TreeIn->next_tree ) {
+    print "PROCESSING TREE NUM: $TreeNum\n";
+    
+    # GET THE TAXA
+    my @taxa = $tree->get_leaf_nodes;
+    my $NumTax = @taxa;
+    print "\tNUM TAX:$NumTax\n";
+    foreach my $IndTaxon (@taxa) {
+	print "\t\t$IndTaxon\n";
+    }
+
+
+    # GET THE ROOT
+    my $root = $tree->get_root_node;
+    print "\tROOT:$root\n";
+
+    # Increment TreeNum
+    $TreeNum++;
+} 
+
+
+# End of program
+print "\nPhyImport.pl has finished.\n";
+exit;
+
+#-----------------------------------------------------------+
+# SUBFUNCTIONS                                              |
+#-----------------------------------------------------------+
 
 =head1 HISTORY
 
 Started: 05/30/2007
 
-Updated: 06/05/2007
+Updated: 06/07/2007
 
 =cut
 
@@ -194,5 +236,8 @@ Updated: 06/05/2007
 #-----------------------------------------------------------+
 # 06/01/2007 - JCE
 # - Program started
-# 06/05/2007
+# 06/05/2007 - JCE
 # - Updated POD documentation 
+# 06/07/2007 - JCE
+# -Adding the ability to read in a tree using Bio::TreeIO;
+#  and Bio::Tree::TreeI;
