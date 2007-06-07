@@ -27,14 +27,14 @@ CREATE TABLE tree (
        , UNIQUE (name)
 ) TYPE=INNODB;
 
-CREATE INDEX node_node_id ON tree(node_id);
+CREATE INDEX tree_node_id ON tree(node_id);
 
 -- nodes in a tree
 CREATE TABLE node (
        node_id INT(10) UNSIGNED NOT NULL auto_increment,
        label VARCHAR(255),
        tree_id INT(10) UNSIGNED NOT NULL,
-       gene_id INT(10) UNSIGNED,
+       bioentry_id INT(10) UNSIGNED,
        taxon_id INT(10) UNSIGNED,
        left_idx INT(10) UNSIGNED,
        right_idx INT(10) UNSIGNED
@@ -48,7 +48,7 @@ CREATE TABLE node (
 --CREATE INDEX tree_tree_id ON tree(tree_id);
 CREATE INDEX node_tree_id ON node(tree_id);
 
-CREATE INDEX node_gene_id ON node(gene_id);
+CREATE INDEX node_bioentry_id ON node(bioentry_id);
 
 CREATE INDEX node_taxon_id ON node(taxon_id);
 
@@ -106,7 +106,7 @@ ALTER TABLE node ADD CONSTRAINT FKnode_tree
        FOREIGN KEY (tree_id) REFERENCES tree (tree_id);
 
 ALTER TABLE node ADD CONSTRAINT FKnode_bioentry
-       FOREIGN KEY (gene_id) REFERENCES bioentry (bioentry_id);
+       FOREIGN KEY (bioentry_id) REFERENCES bioentry (bioentry_id);
 
 ALTER TABLE node ADD CONSTRAINT FKnode_taxon
        FOREIGN KEY (taxon_id) REFERENCES taxon (taxon_id);
