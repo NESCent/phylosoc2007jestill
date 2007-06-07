@@ -29,9 +29,9 @@
 # TO DO:
 # - Create the non-phylo tables components of BioSQL
 # - Run appropriate SQL code in sqldir
-# - Can run system like
+# - Can run system cmd like
 #   source /home/jestill/cvsloc/biosql-schema/sql/biosqldb-mysql.sql
-#   to establish the SQL schema
+#   to establish the SQL schema instead of putting code here
 
 # NOTE: Variables from command line follow load_ncbi_taxonomy.pl
 
@@ -125,6 +125,7 @@ Bill Piel, E<lt>william.piel at yale.eduE<gt>
 use strict;
 use DBI;
 use Getopt::Long;
+use Bio::Tree;
 
 #-----------------------------+
 # VARIABLE SCOPE              |
@@ -304,7 +305,8 @@ unless ($sqldir)
     my $CreateTree = "CREATE TABLE tree (".
 	" tree_id INT(10) UNSIGNED NOT NULL auto_increment,".
 	" name VARCHAR(32) NOT NULL,".
-	" identifier VARCHAR(16),".
+	" identifier VARCHAR(32),".
+	" is_rooted ENUM ('FALSE', 'TRUE') DEFAULT 'TRUE',". 
 	" node_id INT(10) UNSIGNED NOT NULL,".
 	" PRIMARY KEY (tree_id),".
 	" UNIQUE (name)".
@@ -324,7 +326,7 @@ unless ($sqldir)
 	" node_id INT(10) UNSIGNED NOT NULL auto_increment,".
 	" label VARCHAR(255),".
 	" tree_id INT(10) UNSIGNED NOT NULL,".
-	" gene_id INT(10) UNSIGNED,".
+	" bioentry_id INT(10) UNSIGNED,".
 	" taxon_id INT(10) UNSIGNED,".
 	" left_idx INT(10) UNSIGNED,".
 	" right_idx INT(10) UNSIGNED,".
@@ -338,7 +340,7 @@ unless ($sqldir)
     $AddIndex = "CREATE INDEX node_tree_id ON node(tree_id);";
     $dbh->do($AddIndex);
 
-    $AddIndex = "CREATE INDEX node_gene_id ON node(gene_id);";
+    $AddIndex = "CREATE INDEX node_bioentry_id ON node(bioentry_id);";
     $dbh->do($AddIndex);
 
     $AddIndex = "CREATE INDEX node_taxon_id ON node(taxon_id);";
@@ -416,9 +418,16 @@ unless ($sqldir)
 
     # May want to add ON DELETE CASCADE to these so
     # that I can DROP tables later
+
+
+    # The inability to DEFER foreign KEYS with INNODB is a
+    # problem late when trying to add node_id in PhyImport
+    # I will attempt to remove this foreign key and see
+    # if this fixes things JCE -- 06/06/2007
     $SetKey = "ALTER TABLE tree ADD CONSTRAINT FKnode".
 	" FOREIGN KEY (node_id) REFERENCES node (node_id);";
-#      Is the following PG-SQL
+# Deferarable foreign keys are not supported under MySQL InnoDB tables
+# this causes problems with 
 #	" DEFERRABLE INITIALLY DEFERRED;"; 
     $dbh->do($SetKey);
     
@@ -427,7 +436,7 @@ unless ($sqldir)
     $dbh->do($SetKey);
     
     $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_bioentry".
-	" FOREIGN KEY (gene_id) REFERENCES bioentry (bioentry_id);";
+	" FOREIGN KEY (bioentry_id) REFERENCES bioentry (bioentry_id);";
     $dbh->do($SetKey);
 
     $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_taxon".
@@ -684,3 +693,5 @@ Updated: 06/06/2007
 # - Added indexes to the InnoDB tables to allow foreign
 #   key constraints to work
 # - Changed all INTEGER table values to INT(10) UNSIGNED
+# 06/07/2007 - JCE
+# - Modified scheme to fit Phylo-PG v 1.2 schema
