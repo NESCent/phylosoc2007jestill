@@ -134,6 +134,8 @@ my $quiet = 0;                 # Run the program in quiet mode
 my $TreeName;                  # The name of the tree
                                # For files with multiple trees, this may
                                # be used as a base name to name the trees with
+my $statement;                 # Var to hold SQL statement string
+my $sth;                       # Statement handle for SQL statement object
 
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
@@ -195,22 +197,20 @@ unless ($dsn) {
 
 # Commented out while I work through fetching the tree structure
 
-#unless ($pass) {
-#    print "\nEnter password for the user $usrname\n";
-#    system('stty', '-echo') == 0 or die "can't turn off echo: $?";
-#    $pass = <STDIN>;
-#    system('stty', 'echo') == 0 or die "can't turn on echo: $?";
-#    chomp $pass;
-#}
+unless ($pass) {
+    print "\nEnter password for the user $usrname\n";
+    system('stty', '-echo') == 0 or die "can't turn off echo: $?";
+    $pass = <STDIN>;
+    system('stty', 'echo') == 0 or die "can't turn on echo: $?";
+    chomp $pass;
+}
 
 
 #-----------------------------+
 # CONNECT TO THE DATABASE     |
 #-----------------------------+
 # Commented out while I work on fetching tree structure
-#my $dbh = &ConnectToDb($dsn, $usrname, $pass);
-
-
+my $dbh = &ConnectToDb($dsn, $usrname, $pass);
 
 #-----------------------------+
 # LOAD THE INPUT FILE         |
@@ -240,54 +240,80 @@ while( $tree = $TreeIn->next_tree ) {
     # to the $TreeName variable
     if ($tree->id) {
 	print $tree->id."\n";
-    } else {
+    } elsif ($TreeName ){
 	$tree->id($TreeName);
 	print "\tNo tree id was given.\n";
 	print "\tTree name set to: ".$tree->id."\n";
+    } else {
+	print "ERROR: A Tree name must be part of the input file or".
+	    " entered at the command line using the --tree option.\n".
+	    " $0 -h for more information.\n";
+	exit;
     }
     
-
+    #//////////////////////////////////////////////////////
+    # TO DO: Add check here to see if name already exists
+    #        in the DB and allow user to set new name. 
+    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    print "TREE NAME:\t".$tree->id."\n";
+    
     # Add the Tree info to the tree table
     # Commented out while I work on the getting the
     # rest of the info
-#    $dbh->do("SET FOREIGN_KEY_CHECKS=0;");
-#    
-#    $statement = "INSERT INTO tree (name,node_id) VALUES ($treeList{$tr},0)";
-#    # The following for debug
-#    print "\nSTATEMENT:\n$statement\n\n";
-#    $sth = prepare_sth($dbh,$statement);
-#    execute_sth($sth);
-#    
-#    # TURN FK CHECKS BACK ON
-#    $dbh->do("SET FOREIGN_KEY_CHECKS=0;");
-
+    $dbh->do("SET FOREIGN_KEY_CHECKS=0;");
+    
+    $statement = "INSERT INTO tree".
+	" (name,node_id)".
+	" VALUES ('".$tree->id."',0)";
+    
+    # The following for debug
+    #print "\nSTATEMENT:\n$statement\n\n";
+    $sth = &prepare_sth($dbh,$statement);
+    &execute_sth($sth);
+    
+    # TURN FK CHECKS BACK ON
+    $dbh->do("SET FOREIGN_KEY_CHECKS=0;");
+    $dbh->commit();
+    
     #-----------------------------+
     # DETERMINE IF TREE IS ROOTED |
     #-----------------------------+
+    # IT may be better to do this after all nodes have been loaded
     # IF THE TREE IS ROOTED GET THE ROOT NODE 
     if ($tree->get_root_node) {
 	my $root = $tree->get_root_node;
 	# If the tree is rooted without an id, show the internal id
-	if ($root->id) {
-	    print "\tROOT:".$root->id."\n";
-	} else {
-	    print "\tROOT INTERNAL ID:".$root->internal_id."\n";
-	}
+	#if ($root->id) {
+	#    print "\tROOT:".$root->id."\n";
+	#} else {
+	#    print "\tROOT INTERNAL ID:".$root->internal_id."\n";
+	#}
+	#$statement = "INSERT INTO node (tree_id) VALUES ($id) ";
+
+
     } else {
 	print "The tree is not rooted.\n";
+	
+	# SET is_rooted to FALSE
+	#$statement = "";
     }
+    $dbh->commit();
     
+
+    # INSERT ROOT NODE IN node 
+
+
     #-----------------------------+
     # GET THE TAXA                |
     #-----------------------------+ 
-    my @taxa = $tree->get_leaf_nodes;
-    my $NumTax = @taxa;
-
-    # Print leaf node names
-    print "\tNUM TAX:$NumTax\n";
-    foreach my $IndNode (@taxa) {
-	print "\t\t".$IndNode->id."\n";
-    }
+#    my @taxa = $tree->get_leaf_nodes;
+#    my $NumTax = @taxa;
+#
+#    # Print leaf node names
+#    print "\tNUM TAX:$NumTax\n";
+#    foreach my $IndNode (@taxa) {
+#	print "\t\t".$IndNode->id."\n";
+#    }
 
     #-----------------------------+
     # GET ALL OF THE NODES        |
@@ -296,6 +322,39 @@ while( $tree = $TreeIn->next_tree ) {
     my @AllNodes = $tree->get_nodes;
 
     my $NumNodes = @AllNodes;
+
+    # Add nodes to the database, and then convert the node id
+    # from the name given in the input file to the name to be
+    # used in the database
+    
+    foreach my $IndNode (@AllNodes) {
+	
+	# Load the node into the database
+	# The tree_id is 
+	# The tree name is uniqe so can use 
+	# WHERE name = ?
+	$statement = "INSERT INTO node (tree_id)".
+	    " SELECT tree_id FROM tree WHERE name = ?";
+	
+	$sth = &prepare_sth($dbh,$statement);
+	&execute_sth($sth,$tree->id);
+	
+#	$sth = &prepare_sth($sth,$tree->id)
+	
+        # First check to see that an id exists and then
+	# load the information into the node_attribute table
+        if ($IndNode->id) {
+            my $anc = $IndNode->ancestor;
+	    
+        }
+	
+
+    } # End of for each IndNode
+    
+
+    # Temp exit while I work through this
+    exit;
+
 
     # NOTE: It will be possible here to load the
     # node to the database first before loading the edges.
@@ -308,6 +367,9 @@ while( $tree = $TreeIn->next_tree ) {
     #-----------------------------+
     # GET EDGES                   |
     #-----------------------------+
+    # Need to load the nodes again since the node information
+    # has changed
+
     print "\tALL EDGES:\n";
     foreach my $IndNode (@AllNodes) {
 	
@@ -336,6 +398,7 @@ while( $tree = $TreeIn->next_tree ) {
 
 
 # End of program
+$dbh->disconnect();
 print "\nPhyImport.pl has finished.\n";
 exit;
 
@@ -357,11 +420,31 @@ sub ConnectToMySQL {
     my $dbh = DBI->connect($cstr, 
 			   $user, 
 			   $pass, 
-			   {PrintError => 0, RaiseError => 1});
+			   {PrintError => 0, 
+			    RaiseError => 1,
+			    AutoCommit => 0});
     
     $dbh || &error("DBI connect failed : ",$dbh->errstr);
     
     return($dbh);
+}
+
+sub prepare_sth {
+    my $dbh = shift;
+    my $sth = $dbh->prepare(@_);
+    die "failed to prepare statement '$_[0]': ".$dbh->errstr."\n" unless $sth;
+    return $sth;
+}
+
+sub execute_sth {
+
+
+    # Takes a statement handle
+    my $sth = shift;
+
+    my $rv = $sth->execute(@_);
+    die "failed to execute statement: ".$sth->errstr."\n" unless $rv;
+    return $rv;
 }
 
 
@@ -387,3 +470,7 @@ Updated: 06/07/2007
 # - Get edges from tree object
 # - Added ConnnectToDb subfunction
 # - Added ConnectToMySQL subfunction
+# - Added exit when no tree name is available from command
+#   line or from input file.
+# - Added prepare_sth subfucntion
+# - Added execute_sth subfunction
