@@ -15,11 +15,12 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/01/2007                                       |
-# UPDATED: 06/07/2007                                       |
+# UPDATED: 06/08/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Import NEXUS and Newick files from text files to the     |
-#  PhyloDB.                                                 | 
+#  PhyloDB. This incorporates code from parseTreesPG.pl     |
+#  but used the bioperl Tree object to work with trees.     |
 #                                                           |
 # LICENSE:                                                  |
 #  GNU Lesser Public License                                |
@@ -32,7 +33,8 @@
 # - The internal nodes used by TreeI will not be the same
 #   as the nodes used in the database so the DB ID will
 #   need to be fetched when adding edges to the database.
-#
+# - Add taxa to the biosql database and add taxa information
+#   from the tree to the PhyloDB node table
  
 =head1 NAME 
 
@@ -186,6 +188,7 @@ unless ($dsn) {
     ($cruft, $db) = split(/=/,$predb);
     ($cruft, $host) = split(/=/,$prehost);
     # Print for debug
+    print "\tDSN:\t$dsn\n";
     print "\tPRE:\t$prefix\n";
     print "\tDRIVER:\t$driver\n";
     print "\tSUF:\t$suffix\n";
@@ -229,13 +232,23 @@ my $TreeIn = new Bio::TreeIO(-file   => "$infile",
 			     -format => 'newick') ||
     die "Can not open tree file:\n$infile";
 
-
 my $tree;
 my $TreeNum = 1;
 
 while( $tree = $TreeIn->next_tree ) {
+
+    my $TreeDbId;          # integer ID of the tree in the database
+    my $NodeDbId;          # integer ID of a node in the database
+    my $EdgeDbId;          # integer ID of an edge in the database
+
     print "PROCESSING TREE NUM: $TreeNum\n";
-    
+
+
+# It may be useful to print the number of leaf nodes here
+#    my @taxa = $tree->get_leaf_nodes;
+#    my $NumTax = @taxa;    
+
+
     #-----------------------------+
     # TREE NAME                   |
     #-----------------------------+
@@ -252,15 +265,18 @@ while( $tree = $TreeIn->next_tree ) {
 	print "\tNo tree id was given.\n";
 	print "\tTree name set to: ".$tree->id."\n";
     } else {
-	print "ERROR: A Tree name must be part of the input file or".
+	print "\a"; # Sound alarm
+	print "\nERROR: A tree name must be part of the input file or".
 	    " entered at the command line using the --tree option.\n".
-	    " $0 -h for more information.\n";
+	    " For more information use:\n$0 -h\n\n";
+	$dbh->disconnect();
 	exit;
     }
     
     #//////////////////////////////////////////////////////
     # TO DO: Add check here to see if name already exists
-    #        in the DB and allow user to set new name. 
+    #        in the DB and allow user to set new name if
+    #        a conflict exists. 
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     print "TREE NAME:\t".$tree->id."\n";
     
@@ -277,11 +293,136 @@ while( $tree = $TreeIn->next_tree ) {
     #print "\nSTATEMENT:\n$statement\n\n";
     $sth = &prepare_sth($dbh,$statement);
     &execute_sth($sth);
+    $TreeDbId = &last_insert_id($dbh,"tree", $driver);
+    
+    # Print TreeId for Debug
+    print "TREE DB_ID:\t$TreeDbId\n";
     
     # TURN FK CHECKS BACK ON
     $dbh->do("SET FOREIGN_KEY_CHECKS=0;");
     $dbh->commit();
     
+    #-----------------------------+
+    # INSERT NODE DATA            |
+    #-----------------------------+
+    print "PROCESSING NODE DATA\n";
+
+    # Get all nodes from the tree object, load information to the
+    # database and reset $tree->id to the id of the node in the
+    # biosql databse. This will not and show ancestor
+    my @AllNodes = $tree->get_nodes;
+
+    my $NumNodes = @AllNodes;
+
+    # Add nodes to the database, and then convert the node id
+    # from the name given in the input file to the name to be
+    # used in the database
+    
+    foreach my $IndNode (@AllNodes) {
+	
+	# Load the node into the database
+	# The tree_id is 
+	# The tree name is uniqe so can use 
+	# WHERE name = ?
+
+	#$statement = "INSERT INTO node (tree_id)".
+	#    " SELECT tree_id FROM tree WHERE name = ?";
+
+	$statement = "INSERT INTO node (tree_id) VALUES (?)";
+	
+	$sth = &prepare_sth($dbh,$statement);
+	# Jamie replace the following to just use the TreeDbID
+	# that is fetched above
+	#&execute_sth($sth,$tree->id);
+	&execute_sth($sth,$TreeDbId);
+
+	# Get the NodeId for this node in the biosql database
+	my $NodeDbId = &last_insert_id($dbh, "node", $driver);
+
+	# Add node label if it exists in the tree object
+	if ($IndNode->id) {
+	    $statement = "UPDATE node SET label = ? WHERE node_id = ?";
+	    $sth = &prepare_sth($dbh,$statement);
+	    execute_sth($sth, $IndNode->id, $NodeDbId );
+	}
+
+	# I would like to be able to set the Node->Id here for the
+	# tree object. The alternative is to make a reference hash
+	# that allows me to go from TreeObject internal id to
+	# the id in the database.
+
+	# Reset the tree object id to the database id
+	# this will be used below to add edges to the database so
+	# we need to be careful and just die if this does not work
+	$IndNode->id($NodeDbId) || 
+	    die "The Tree Object Node ID can not be set\n";
+	
+        # First check to see that an id exists and then
+	# load the information into the node_attribute table
+
+    } # End of for each IndNode
+    
+    $dbh->commit();
+
+
+    # NOTE: It will be possible here to load the
+    # node to the database first before loading the edges.
+    # If the nodes have and id, this name will be loaded as 
+    # a node attribute. At this point, the node_id assigned
+    # by the database can be used to reset the value of 
+    # $node->id. Then further use of the nodes in describing
+    # edges can use $node-> to add edges
+
+    #-----------------------------+
+    # GET EDGES                   |
+    #-----------------------------+
+    # Need to cycle through the the nodes again since the node ids have
+    # been changed to the Node Ids used by the biosql database.
+
+    print "\tPROCESSING EDGE DATA:\n";
+    foreach my $IndNode (@AllNodes) {
+	
+	# First check to see that an id exists
+	if ($IndNode->id) {
+	    my $anc = $IndNode->ancestor;
+	    
+	    # Only add edges when there is an ancestor node that has 
+	    # an id.
+	    if ($anc)
+	    {
+		if ($anc->id) {
+		    
+		    $statement = "INSERT INTO edge".
+			" (parent_node_id, child_node_id)".
+			" VALUES (?,?)";
+		    my $edge_sth = &prepare_sth($dbh,$statement);
+		    
+		    execute_sth($edge_sth, 
+				$IndNode->id, 
+				$anc->id);
+		    my $EdgeDbId = last_insert_id($dbh,"edge", $driver);
+		    
+		    # TO DO: Add edge related information here
+		    
+		    # Print output, node ids printed below
+		    # should match the integer ids used in the database
+		    print $anc->id;
+		    print "-->";
+		    print $IndNode->id;
+		    print "\n";
+		} # End of if ancestor has id 
+	    } # End of if the node has an ancestor
+	} # End of if node has id
+    } # End of for each IndNode
+
+    $dbh->commit();
+
+    #///////////////////////////////////////
+    # Temp exit while I work through this
+    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    $dbh->disconnect;
+    exit;
+
     #-----------------------------+
     # DETERMINE IF TREE IS ROOTED |
     #-----------------------------+
@@ -306,100 +447,12 @@ while( $tree = $TreeIn->next_tree ) {
     }
     $dbh->commit();
     
-
-    # INSERT ROOT NODE IN node 
-
+    # INSERT ROOT NODE IN node either now or later 
 
     #-----------------------------+
-    # GET THE TAXA                |
-    #-----------------------------+ 
-#    my @taxa = $tree->get_leaf_nodes;
-#    my $NumTax = @taxa;
-#
-#    # Print leaf node names
-#    print "\tNUM TAX:$NumTax\n";
-#    foreach my $IndNode (@taxa) {
-#	print "\t\t".$IndNode->id."\n";
-#    }
-
+    # INCREMENT TreeNum           |
     #-----------------------------+
-    # GET ALL OF THE NODES        |
-    #-----------------------------+
-    # Get nodes and show ancestor
-    my @AllNodes = $tree->get_nodes;
-
-    my $NumNodes = @AllNodes;
-
-    # Add nodes to the database, and then convert the node id
-    # from the name given in the input file to the name to be
-    # used in the database
-    
-    foreach my $IndNode (@AllNodes) {
-	
-	# Load the node into the database
-	# The tree_id is 
-	# The tree name is uniqe so can use 
-	# WHERE name = ?
-	$statement = "INSERT INTO node (tree_id)".
-	    " SELECT tree_id FROM tree WHERE name = ?";
-	
-	$sth = &prepare_sth($dbh,$statement);
-	&execute_sth($sth,$tree->id);
-	
-#	$sth = &prepare_sth($sth,$tree->id)
-	
-        # First check to see that an id exists and then
-	# load the information into the node_attribute table
-        if ($IndNode->id) {
-            my $anc = $IndNode->ancestor;
-	    
-        }
-	
-
-    } # End of for each IndNode
-    
-
-    # Temp exit while I work through this
-    exit;
-
-
-    # NOTE: It will be possible here to load the
-    # node to the database first before loading the edges.
-    # If the nodes have and id, this name will be loaded as 
-    # a node attribute. At this point, the node_id assigned
-    # by the database can be used to reset the value of 
-    # $node->id. Then further use of the nodes in describing
-    # edges can use $node-> to add edges
-
-    #-----------------------------+
-    # GET EDGES                   |
-    #-----------------------------+
-    # Need to load the nodes again since the node information
-    # has changed
-
-    print "\tALL EDGES:\n";
-    foreach my $IndNode (@AllNodes) {
-	
-	# First check to see that an id exists
-	if ($IndNode->id) {
-	    my $anc = $IndNode->ancestor;
-	    
-	    # Only print edges when there is an ancestor node has 
-	    # an id. This 
-	    if ($anc->id) {
-		print "\t\t".$IndNode->id;
-		print "\t--\t";
-		print $anc->id;
-		print "\n";
-	    }
-	} 
-    } # End of for each IndNode
-
-
-
-    # Increment TreeNum
     $TreeNum++;
-
 
 } 
 
@@ -419,6 +472,20 @@ sub ConnectToDb {
     return ConnectToPg(@_) if $cstr =~ /:pg:/i;
     die "can't understand driver in connection string: $cstr\n";
 }
+
+sub ConnectToPg {
+
+	my ($cstr, $user, $pass) = @_;
+	
+	my $dbh = DBI->connect($cstr, $user, $pass, 
+                               {PrintError => 0, 
+                                RaiseError => 1,
+                                AutoCommit => 0});
+	$dbh || &error("DBI connect failed : ",$dbh->errstr);
+
+	return($dbh);
+} # End of ConnectToPG subfunction
+
 
 sub ConnectToMySQL {
     
@@ -445,21 +512,47 @@ sub prepare_sth {
 
 sub execute_sth {
 
-
     # Takes a statement handle
     my $sth = shift;
 
     my $rv = $sth->execute(@_);
-    die "failed to execute statement: ".$sth->errstr."\n" unless $rv;
+    unless ($rv) {
+	$dbh->disconnect();
+	die "failed to execute statement: ".$sth->errstr."\n"
+    }
     return $rv;
-}
+} # End of execute_sth subfunction
+
+sub last_insert_id {
+    
+    # The use of last_insert_id assumes that the no one
+    # is interleaving nodes while you are working with the db
+    my $dbh = shift;
+    my $table_name = shift;
+    my $driver = shift;
+    # The following replace by sending driver info to the sufunction
+    #my $driver = $dbh->get_info(SQL_DBMS_NAME);
+    if (lc($driver) eq 'mysql') {
+	return $dbh->{'mysql_insertid'};
+    } elsif ((lc($driver) eq 'pg') || ($driver eq 'PostgreSQL')) {
+	my $sql = "SELECT currval('${table_name}_pk_seq')";
+	my $stmt = $dbh->prepare_cached($sql);
+	my $rv = $stmt->execute;
+	die "failed to retrieve last ID generated\n" unless $rv;
+	my $row = $stmt->fetchrow_arrayref;
+	$stmt->finish;
+	return $row->[0];
+    } else {
+	die "don't know what to do with driver $driver\n";
+    }
+} # End of last_insert_id subfunction
 
 
 =head1 HISTORY
 
 Started: 05/30/2007
 
-Updated: 06/07/2007
+Updated: 06/08/2007
 
 =cut
 
@@ -481,3 +574,10 @@ Updated: 06/07/2007
 #   line or from input file.
 # - Added prepare_sth subfucntion
 # - Added execute_sth subfunction
+# 06/08/2007
+# - Added last_insert_id subfunction
+# - Added ConnectToPg subfunction
+# - Modified execute_sth to disconnect the db handle 
+#   before die
+# - Added code to insert nodes in the database
+# - Added code to insert edges in the database
