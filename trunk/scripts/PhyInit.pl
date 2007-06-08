@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 05/30/2007                                       |
-# UPDATED: 06/06/2007                                       |
+# UPDATED: 06/07/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Initialize a BioSQL database with the phyloinformatics   |
@@ -125,7 +125,7 @@ Bill Piel, E<lt>william.piel at yale.eduE<gt>
 use strict;
 use DBI;
 use Getopt::Long;
-use Bio::Tree;
+#use Bio::Tree;
 
 #-----------------------------+
 # VARIABLE SCOPE              |
@@ -238,6 +238,9 @@ my $dbh = &ConnectToDb($dsn, $usrname, $pass);
 # THE DATA IN THE EXISTING TABLES WILL BE LOST
 # This provides a place for the user to back out before
 # trashing any hard work that may be stored in existing tables.
+# For the full database, this could be done by reading the
+# tables from the MySQL database.
+#
 my @TblList = ("tree",
 	       "node",
 	       "edge",
@@ -481,13 +484,19 @@ unless ($sqldir)
 	" FOREIGN KEY (term_id) REFERENCES term (term_id);";
     $dbh->do($SetKey);
 
+
+    # Commit changes, This is new as of 06/07/2007 since I
+    # had AutoCommit on by default previosly
+    $dbh->commit();
+
 } # End of Unless $sqldir
 # If sqldir is provided, then just create based on that
 # This is better for maintenance since only the SQL
 # code would need to be modified
 
-# PRINT EXIT STATUS
+# PRINT EXIT STATUS AND CLOSE DOWN SHOP
 print "\nThe database $db has been initialized.\n";
+$dbh->disconnect;
 
 exit;
 
@@ -511,7 +520,9 @@ sub ConnectToMySQL {
     my $dbh = DBI->connect($cstr, 
 			   $user, 
 			   $pass, 
-			   {PrintError => 0, RaiseError => 1});
+			   {PrintError => 0, 
+			    RaiseError => 1,
+			    AutoCommit => 0});
     
     $dbh || &error("DBI connect failed : ",$dbh->errstr);
     
@@ -651,8 +662,6 @@ sub HowManyRecords
 
 }
 
-
-
 =head1 HISTORY
 
 Started: 05/30/2007
@@ -695,3 +704,6 @@ Updated: 06/06/2007
 # - Changed all INTEGER table values to INT(10) UNSIGNED
 # 06/07/2007 - JCE
 # - Modified scheme to fit Phylo-PG v 1.2 schema
+# - Added AutoCommit => 0 to the DBI connection parameters
+#   for MySQL 
+# - Added $dbh->commit() and $dbh->disconnect() as appropriate

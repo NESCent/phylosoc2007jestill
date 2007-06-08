@@ -247,6 +247,20 @@ while( $tree = $TreeIn->next_tree ) {
     }
     
 
+    # Add the Tree info to the tree table
+    # Commented out while I work on the getting the
+    # rest of the info
+#    $dbh->do("SET FOREIGN_KEY_CHECKS=0;");
+#    
+#    $statement = "INSERT INTO tree (name,node_id) VALUES ($treeList{$tr},0)";
+#    # The following for debug
+#    print "\nSTATEMENT:\n$statement\n\n";
+#    $sth = prepare_sth($dbh,$statement);
+#    execute_sth($sth);
+#    
+#    # TURN FK CHECKS BACK ON
+#    $dbh->do("SET FOREIGN_KEY_CHECKS=0;");
+
     #-----------------------------+
     # DETERMINE IF TREE IS ROOTED |
     #-----------------------------+
@@ -283,6 +297,17 @@ while( $tree = $TreeIn->next_tree ) {
 
     my $NumNodes = @AllNodes;
 
+    # NOTE: It will be possible here to load the
+    # node to the database first before loading the edges.
+    # If the nodes have and id, this name will be loaded as 
+    # a node attribute. At this point, the node_id assigned
+    # by the database can be used to reset the value of 
+    # $node->id. Then further use of the nodes in describing
+    # edges can use $node-> to add edges
+
+    #-----------------------------+
+    # GET EDGES                   |
+    #-----------------------------+
     print "\tALL EDGES:\n";
     foreach my $IndNode (@AllNodes) {
 	
@@ -301,8 +326,12 @@ while( $tree = $TreeIn->next_tree ) {
 	} 
     } # End of for each IndNode
 
+
+
     # Increment TreeNum
     $TreeNum++;
+
+
 } 
 
 
