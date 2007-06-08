@@ -5,8 +5,9 @@
 use Bio::TreeIO;
 use Bio::Tree::RandomFactory;
 # initialize a TreeIO writer to output the trees as we create them
-my $out = Bio::TreeIO->new(-format => 'newick',
-                           -file   => ">RandomTree.tre");
+$out = Bio::TreeIO->new(-format => 'newick',
+			-file   => ">RandomTree.tre");
+
 my @listoftaxa = qw(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z);
 my $factory = new Bio::Tree::RandomFactory(-taxa => \@listoftaxa);
 

@@ -51,11 +51,11 @@ PhyImport.pl - Import phylogenetic trees from common file formats
         --host       # optional: host to connect with
         --help       # Print this help message
         --quiet      # Run the program in quiet mode.
+        --format     # "newick", "nexus" (default "newick")
 
 =head1 DESCRIPTION
 
-Import NEXUS and Newick files from text files to the
-PhyloDB. 
+Import NEXUS and Newick files from text files to the PhyloDB.
 
 =head1 ARGUMENTS
 
@@ -131,7 +131,7 @@ my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
 my $dsn = $ENV{DBI_DSN};       # DSN for database connection
 my $infile;                    # Full path to the input file to parse
-my $format = "nex";            # Data format used in infile
+my $format = 'newick';         # Data format used in infile
 my $db;                        # Database name (ie. biosql)
 my $host;                      # Database host (ie. localhost)
 my $driver;                    # Database driver (ie. mysql)
@@ -161,6 +161,13 @@ my $ok = GetOptions("d|dsn=s"    => \$dsn,
 		    "t|tree=s"   => \$TreeName,
 		    "q|quiet"    => \$quiet,
 		    "h|help"     => \$help);
+
+# TO DO: Normalize format to 
+
+# Exit if format string is not recognized
+print "Requested format:$format\n";
+$format = &InFormatCheck($format);
+
 
 # SHOW HELP
 if($help || (!$ok)) {
@@ -229,8 +236,9 @@ print "\nLoading tree...\n";
 
 my $TreeIn = new Bio::TreeIO(-file   => "$infile",
 #			     -format => 'nexus') ||
-			     -format => 'newick') ||
-    die "Can not open tree file:\n$infile";
+#			     -format => 'newick') ||
+			     -format => $format) ||
+    die "Can not open $format format tree file:\n$infile";
 
 my $tree;
 my $TreeNum = 1;
@@ -466,6 +474,26 @@ exit;
 # SUBFUNCTIONS                                              |
 #-----------------------------------------------------------+
 
+sub InFormatCheck {
+    # This will try to make sense of the format string
+    # that is being passed at the command line
+    my $In = $_[0];  # Format string coming into the subfunction
+    my $Out;         # Format string returned from the subfunction
+
+    if ( ($In eq "nexus") || ($In eq "NEXUS") || 
+	 ($In eq "nex") || ($In eq "NEX") ) {
+	return "nexus";
+    };
+
+    if ( ($In eq "newick") || ($In eq "NEWICK") || 
+	 ($In eq "new") || ($In eq "NEW") ) {
+	return "newick";
+    };
+
+    die "Can not intrepret file format:$In\n";
+
+}
+
 sub ConnectToDb {
     my ($cstr) = @_;
     return ConnectToMySQL(@_) if $cstr =~ /:mysql:/i;
@@ -574,10 +602,11 @@ Updated: 06/08/2007
 #   line or from input file.
 # - Added prepare_sth subfucntion
 # - Added execute_sth subfunction
-# 06/08/2007
+# 06/08/2007 - JCE
 # - Added last_insert_id subfunction
 # - Added ConnectToPg subfunction
 # - Modified execute_sth to disconnect the db handle 
 #   before die
 # - Added code to insert nodes in the database
 # - Added code to insert edges in the database
+# - Added InFormatCheck subfunction
