@@ -142,7 +142,7 @@ my $sqldir;                    # Directory that contains the sql to run
                                # to create the tables.
 my $quiet = 0;                 # Run the program in quiet mode
                                # will not prompt for command line options
-my $TreeName;                  # The name of the tree
+my $tree_name;                  # The name of the tree
                                # For files with multiple trees, this may
                                # be used as a base name to name the trees with
 my $statement;                 # Var to hold SQL statement string
@@ -160,7 +160,7 @@ my $ok = GetOptions("d|dsn=s"    => \$dsn,
 		    "driver=s"   => \$driver,
 		    "dbname=s"   => \$db,
 		    "host=s"     => \$host,
-		    "t|tree=s"   => \$TreeName,
+		    "t|tree=s"   => \$tree_name,
 		    "q|quiet"    => \$quiet,
 		    "h|help"     => \$help);
 
@@ -168,7 +168,7 @@ my $ok = GetOptions("d|dsn=s"    => \$dsn,
 
 # Exit if format string is not recognized
 #print "Requested format:$format\n";
-$format = &InFormatCheck($format);
+$format = &in_format_check($format);
 
 
 # SHOW HELP
@@ -229,40 +229,45 @@ unless ($pass) {
 # CONNECT TO THE DATABASE     |
 #-----------------------------+
 # Commented out while I work on fetching tree structure
-my $dbh = &ConnectToDb($dsn, $usrname, $pass);
+my $dbh = &connect_to_db($dsn, $usrname, $pass);
+
+#-----------------------------+
+# EXIT HANDLER                |
+#-----------------------------+
+END {
+    &end_work($dbh);
+}
 
 #-----------------------------+
 # LOAD THE INPUT FILE         |
 #-----------------------------+
 print "\nLoading tree...\n";
 
-my $TreeIn = new Bio::TreeIO(-file   => "$infile",
-#			     -format => 'nexus') ||
-#			     -format => 'newick') ||
-			     -format => $format) ||
+my $tree_in = new Bio::TreeIO(-file   => "$infile",
+			      -format => $format) ||
     die "Can not open $format format tree file:\n$infile";
 
 my $tree;
-my $TreeNum = 1;
+my $tree_num = 1;
 
-my $CountTrees = 0;
+my $count_trees = 0;
 
 # The following used for testing if trees are in the file
-#while( $tree = $TreeIn->next_tree ) {
-#    $CountTrees++;
+#while( $tree = $tree_in->next_tree ) {
+#    $count_trees++;
 #}
-#print "$CountTrees were found in the file:\n$infile.\n";
+#print "$count_trees were found in the file:\n$infile.\n";
 #exit;
 
 # Need to check out the tree here
 
-while( $tree = $TreeIn->next_tree ) {
+while( $tree = $tree_in->next_tree ) {
 
-    my $TreeDbId;          # integer ID of the tree in the database
-    my $NodeDbId;          # integer ID of a node in the database
-    my $EdgeDbId;          # integer ID of an edge in the database
+    my $tree_db_id;        # integer ID of the tree in the database
+    my $node_db_id;          # integer ID of a node in the database
+    my $edge_db_id;          # integer ID of an edge in the database
 
-    print "PROCESSING TREE NUM: $TreeNum\n";
+    print "PROCESSING TREE NUM: $tree_num\n";
 
 
 # It may be useful to print the number of leaf nodes here
@@ -278,11 +283,11 @@ while( $tree = $TreeIn->next_tree ) {
     # check to see if the id is already used in the database
     # If there are multiple trees in the database, and no
     # tree name has already been used, then append the tree num
-    # to the $TreeName variable
+    # to the $tree_name variable
     if ($tree->id) {
 	print $tree->id."\n";
-    } elsif ($TreeName ){
-	$tree->id($TreeName);
+    } elsif ($tree_name){
+	$tree->id($tree_name);
 	print "\tNo tree id was given.\n";
 	print "\tTree name set to: ".$tree->id."\n";
     } else {
@@ -314,10 +319,10 @@ while( $tree = $TreeIn->next_tree ) {
     #print "\nSTATEMENT:\n$statement\n\n";
     $sth = &prepare_sth($dbh,$statement);
     &execute_sth($sth);
-    $TreeDbId = &last_insert_id($dbh,"tree", $driver);
+    $tree_db_id = &last_insert_id($dbh,"tree", $driver);
     
     # Print TreeId for Debug
-    print "TREE DB_ID:\t$TreeDbId\n";
+    print "TREE DB_ID:\t$tree_db_id\n";
     
     # TURN FK CHECKS BACK ON
     $dbh->do("SET FOREIGN_KEY_CHECKS=0;");
@@ -331,17 +336,17 @@ while( $tree = $TreeIn->next_tree ) {
     # Get all nodes from the tree object, load information to the
     # database and reset $tree->id to the id of the node in the
     # biosql databse. This will not and show ancestor
-    my @AllNodes = $tree->get_nodes;
+    my @all_nodes = $tree->get_nodes;
 
-    my $NumNodes = @AllNodes;
-    print "NUM NODES: $NumNodes\n";
+    my $num_nodes = @all_nodes;
+    print "NUM NODES: $num_nodes\n";
 
 
     # Add nodes to the database, and then convert the node id
     # from the name given in the input file to the name to be
     # used in the database
     
-    foreach my $IndNode (@AllNodes) {
+    foreach my $ind_node (@all_nodes) {
 	
 	# Load the node into the database
 	# The tree_id is 
@@ -357,16 +362,16 @@ while( $tree = $TreeIn->next_tree ) {
 	# Jamie replace the following to just use the TreeDbID
 	# that is fetched above
 	#&execute_sth($sth,$tree->id);
-	&execute_sth($sth,$TreeDbId);
+	&execute_sth($sth,$tree_db_id);
 
 	# Get the NodeId for this node in the biosql database
-	my $NodeDbId = &last_insert_id($dbh, "node", $driver);
+	my $node_db_id = &last_insert_id($dbh, "node", $driver);
 
 	# Add node label if it exists in the tree object
-	if ($IndNode->id) {
+	if ($ind_node->id) {
 	    $statement = "UPDATE node SET label = ? WHERE node_id = ?";
 	    $sth = &prepare_sth($dbh,$statement);
-	    execute_sth($sth, $IndNode->id, $NodeDbId );
+	    execute_sth($sth, $ind_node->id, $node_db_id );
 	}
 
 	# I would like to be able to set the Node->Id here for the
@@ -377,7 +382,7 @@ while( $tree = $TreeIn->next_tree ) {
 	# Reset the tree object id to the database id
 	# this will be used below to add edges to the database so
 	# we need to be careful and just die if this does not work
-	$IndNode->id($NodeDbId) || 
+	$ind_node->id($node_db_id) || 
 	    die "The Tree Object Node ID can not be set\n";
 	
         # First check to see that an id exists and then
@@ -403,11 +408,11 @@ while( $tree = $TreeIn->next_tree ) {
     # been changed to the Node Ids used by the biosql database.
 
     print "\tPROCESSING EDGE DATA:\n";
-    foreach my $IndNode (@AllNodes) {
+    foreach my $ind_node (@all_nodes) {
 	
 	# First check to see that an id exists
-	if ($IndNode->id) {
-	    my $anc = $IndNode->ancestor;
+	if ($ind_node->id) {
+	    my $anc = $ind_node->ancestor;
 	    
 	    # Only add edges when there is an ancestor node that has 
 	    # an id.
@@ -421,9 +426,9 @@ while( $tree = $TreeIn->next_tree ) {
 		    my $edge_sth = &prepare_sth($dbh,$statement);
 		    
 		    execute_sth($edge_sth, 
-				$IndNode->id, 
+				$ind_node->id, 
 				$anc->id);
-		    my $EdgeDbId = last_insert_id($dbh,"edge", $driver);
+		    my $edge_db_id = last_insert_id($dbh,"edge", $driver);
 		    
 		    # TO DO: Add edge related information here
 		    
@@ -431,7 +436,7 @@ while( $tree = $TreeIn->next_tree ) {
 		    # should match the integer ids used in the database
 		    print $anc->id;
 		    print "-->";
-		    print $IndNode->id;
+		    print $ind_node->id;
 		    print "\n";
 		} # End of if ancestor has id 
 	    } # End of if the node has an ancestor
@@ -475,7 +480,7 @@ while( $tree = $TreeIn->next_tree ) {
     #-----------------------------+
     # INCREMENT TreeNum           |
     #-----------------------------+
-    $TreeNum++;
+    $tree_num++;
 
 } 
 
@@ -489,12 +494,29 @@ exit;
 # SUBFUNCTIONS                                              |
 #-----------------------------------------------------------+
 
-sub InFormatCheck {
+sub end_work {
+# Copied from load_itis_taxonomy.pl
+    
+    my ($dbh, $commit) = @_;
+    
+    # skip if $dbh not set up yet, or isn't an open connection
+    return unless $dbh && $dbh->{Active};
+    # end the transaction
+    my $rv = $commit ? $dbh->commit() : $dbh->rollback();
+    if(!$rv) {
+	print STDERR ($commit ? "commit " : "rollback ").
+	    "failed: ".$dbh->errstr;
+    }
+    $dbh->disconnect() unless defined($commit);
+    
+}
+
+sub in_format_check {
     # This will try to make sense of the format string
     # that is being passed at the command line
-    my $In = $_[0];  # Format string coming into the subfunction
+    my ($In) = @_;  # Format string coming into the subfunction
     my $Out;         # Format string returned from the subfunction
-
+    
     # NEXUS FORMAT
     if ( ($In eq "nexus") || ($In eq "NEXUS") || 
 	 ($In eq "nex") || ($In eq "NEX") ) {
@@ -521,14 +543,14 @@ sub InFormatCheck {
 
 }
 
-sub ConnectToDb {
+sub connect_to_db {
     my ($cstr) = @_;
-    return ConnectToMySQL(@_) if $cstr =~ /:mysql:/i;
-    return ConnectToPg(@_) if $cstr =~ /:pg:/i;
+    return connect_to_mysql(@_) if $cstr =~ /:mysql:/i;
+    return connect_to_pg(@_) if $cstr =~ /:pg:/i;
     die "can't understand driver in connection string: $cstr\n";
 }
 
-sub ConnectToPg {
+sub connect_to_pg {
 
 	my ($cstr, $user, $pass) = @_;
 	
@@ -542,7 +564,7 @@ sub ConnectToPg {
 } # End of ConnectToPG subfunction
 
 
-sub ConnectToMySQL {
+sub connect_to_mysql {
     
     my ($cstr, $user, $pass) = @_;
     
@@ -560,16 +582,17 @@ sub ConnectToMySQL {
 
 sub prepare_sth {
     my $dbh = shift;
+#    my ($dbh) = @_;
     my $sth = $dbh->prepare(@_);
     die "failed to prepare statement '$_[0]': ".$dbh->errstr."\n" unless $sth;
     return $sth;
 }
 
 sub execute_sth {
-
+    
     # I would like to return the statement string here to figure 
     # out where problems are.
-
+    
     # Takes a statement handle
     my $sth = shift;
 
@@ -582,12 +605,15 @@ sub execute_sth {
 } # End of execute_sth subfunction
 
 sub last_insert_id {
+
+    #my ($dbh,$table_name,$driver) = @_;
     
     # The use of last_insert_id assumes that the no one
     # is interleaving nodes while you are working with the db
     my $dbh = shift;
     my $table_name = shift;
     my $driver = shift;
+
     # The following replace by sending driver info to the sufunction
     #my $driver = $dbh->get_info(SQL_DBMS_NAME);
     if (lc($driver) eq 'mysql') {
@@ -610,7 +636,7 @@ sub last_insert_id {
 
 Started: 05/30/2007
 
-Updated: 06/08/2007
+Updated: 06/15/2007
 
 =cut
 
@@ -627,16 +653,23 @@ Updated: 06/08/2007
 # - Get nodes from tree object
 # - Get edges from tree object
 # - Added ConnnectToDb subfunction
-# - Added ConnectToMySQL subfunction
+# - Added connect_to_mysql subfunction
 # - Added exit when no tree name is available from command
 #   line or from input file.
 # - Added prepare_sth subfucntion
 # - Added execute_sth subfunction
 # 06/08/2007 - JCE
 # - Added last_insert_id subfunction
-# - Added ConnectToPg subfunction
+# - Added connect_to_pg subfunction
 # - Modified execute_sth to disconnect the db handle 
 #   before die
 # - Added code to insert nodes in the database
 # - Added code to insert edges in the database
-# - Added InFormatCheck subfunction
+# - Added in_format_check subfunction
+# 06/15/2007 - JCE
+# - Checked code with new installation of bioperl
+#   nexus works
+# - Added EndWork subfunction from load_itis_taxonomy.pl 
+# - Changed subfunctions to read intput from @_ instead of $_[0];
+# - Changed all variable names to lowercase with underscores
+# - Changed all subfunction names to lowercase with underscores
