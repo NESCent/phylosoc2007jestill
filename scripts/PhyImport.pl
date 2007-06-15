@@ -15,7 +15,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/01/2007                                       |
-# UPDATED: 06/08/2007                                       |
+# UPDATED: 06/15/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Import NEXUS and Newick files from text files to the     |
@@ -44,6 +44,7 @@ PhyImport.pl - Import phylogenetic trees from common file formats
 
   Usage: PhyImport.pl
         --dsn        # The DSN string the database to connect to
+        --infile     # Input tree file to 
         --dbuser     # user name to connect with
         --dbpass     # password to connect with
         --dbname     # Name of database to use
@@ -52,6 +53,7 @@ PhyImport.pl - Import phylogenetic trees from common file formats
         --help       # Print this help message
         --quiet      # Run the program in quiet mode.
         --format     # "newick", "nexus" (default "newick")
+        --tree       # Tree name to use
 
 =head1 DESCRIPTION
 
@@ -165,7 +167,7 @@ my $ok = GetOptions("d|dsn=s"    => \$dsn,
 # TO DO: Normalize format to 
 
 # Exit if format string is not recognized
-print "Requested format:$format\n";
+#print "Requested format:$format\n";
 $format = &InFormatCheck($format);
 
 
@@ -242,6 +244,17 @@ my $TreeIn = new Bio::TreeIO(-file   => "$infile",
 
 my $tree;
 my $TreeNum = 1;
+
+my $CountTrees = 0;
+
+# The following used for testing if trees are in the file
+#while( $tree = $TreeIn->next_tree ) {
+#    $CountTrees++;
+#}
+#print "$CountTrees were found in the file:\n$infile.\n";
+#exit;
+
+# Need to check out the tree here
 
 while( $tree = $TreeIn->next_tree ) {
 
@@ -321,6 +334,8 @@ while( $tree = $TreeIn->next_tree ) {
     my @AllNodes = $tree->get_nodes;
 
     my $NumNodes = @AllNodes;
+    print "NUM NODES: $NumNodes\n";
+
 
     # Add nodes to the database, and then convert the node id
     # from the name given in the input file to the name to be
@@ -480,15 +495,27 @@ sub InFormatCheck {
     my $In = $_[0];  # Format string coming into the subfunction
     my $Out;         # Format string returned from the subfunction
 
+    # NEXUS FORMAT
     if ( ($In eq "nexus") || ($In eq "NEXUS") || 
 	 ($In eq "nex") || ($In eq "NEX") ) {
 	return "nexus";
     };
 
+    # NEWICK FORMAT
     if ( ($In eq "newick") || ($In eq "NEWICK") || 
 	 ($In eq "new") || ($In eq "NEW") ) {
 	return "newick";
     };
+
+    # NEW HAMPSHIRE EXTENDED
+    if ( ($In eq "nhx") || ($In eq "NHX") ) {
+	return "nhx";
+    };
+    
+    # LINTREE FORMAT
+    if ( ($In eq "lintree") || ($In eq "LINTREE") ) {
+	return "lintree";
+    }
 
     die "Can not intrepret file format:$In\n";
 
@@ -539,6 +566,9 @@ sub prepare_sth {
 }
 
 sub execute_sth {
+
+    # I would like to return the statement string here to figure 
+    # out where problems are.
 
     # Takes a statement handle
     my $sth = shift;
