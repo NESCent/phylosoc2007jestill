@@ -186,6 +186,52 @@ unless ($dsn) {
     $driver = "mysql" unless $driver;
     $dsn = "DBI:$driver:database=$db;host=$host";
 } else {
+    # Can parse the dsn using 
+    #DBI->parse_dsn($dsn);
+    
+    # I had to upgrade DBI to try to get this to work
+    # and the results are not what I expected
+    print "DSN:\t$dsn\n";
+
+
+#    my ($t_scheme, $t_driver, $t_attr_string,
+#        $t_attr_hash, $t_driver_dsn);
+#    
+#    ($t_scheme, $t_driver, $t_attr_string, 
+##	$t_attr_hash, $t_driver_dsn) = DBI->parse_dsn($dsn)
+#     $t_attr_hash, $t_driver_dsn) = 
+#	 DBI->parse_dsn("DBI:MyDriver(RaiseError=>1):db=test;port=42")
+#	 || die "Can't parse DBI DSN '$dsn'";
+
+
+    my @artest = &parse_dsn("DBI:MyDriver(RaiseError=>1):db=test;port=42") 
+	|| die "Can't parse the DSN\n";
+    
+    print $artest[0]."\n";
+    print $artest[1]."\n";
+#    if ($t_scheme) {
+#	print "SCHEME:\t$t_scheme\n";
+#    }
+#    if ($t_driver) {
+#	print "DRIVER:\t$t_driver\n";
+#    }
+#    if ($t_attr_string){
+#	print "ATRSTR:\t$t_attr_string\n";
+#    }
+#    if ($t_attr_hash){
+#        print "ATRSTR:\t$t_attr_hash\n";
+#    }
+#    if ($t_driver_dsn) {
+#	print "DRIVERDSN:\t$t_driver_dsn\n";
+#    }
+
+
+    # Temp exit while I work through these variables
+    exit;
+    
+    
+# scheme is always dbi
+
     # We need to parse the database name, driver etc from the dsn string
     # in the form of DBI:$driver:database=$db;host=$host
     # Other dsn strings will not be parsed properly
@@ -631,12 +677,23 @@ sub last_insert_id {
     }
 } # End of last_insert_id subfunction
 
+# The following pulled directly from the DBI module
+# this is an attempt to see if I can get the DSNs to parse 
+sub parse_dsn {
+    my ($dsn) = @_;
+    $dsn =~ s/^(dbi):(\w*?)(?:\((.*?)\))?://i or return;
+    my ($scheme, $driver, $attr, $attr_hash) = (lc($1), $2, $3);
+    $driver ||= $ENV{DBI_DRIVER} || '';
+    $attr_hash = { split /\s*=>?\s*|\s*,\s*/, $attr, -1 } if $attr;
+    return ($scheme, $driver, $attr, $attr_hash, $dsn);
+}
+
 
 =head1 HISTORY
 
 Started: 05/30/2007
 
-Updated: 06/15/2007
+Updated: 06/18/2007
 
 =cut
 
@@ -673,3 +730,7 @@ Updated: 06/15/2007
 # - Changed subfunctions to read intput from @_ instead of $_[0];
 # - Changed all variable names to lowercase with underscores
 # - Changed all subfunction names to lowercase with underscores
+# 06/18/2007
+# - Trying to get parse_dsn to work. Moving the subfunction from
+#   the DB module
+# - 
