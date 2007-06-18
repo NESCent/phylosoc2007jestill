@@ -1,11 +1,4 @@
 #!/usr/bin/perl -w
-#//////////////////////////////////////////////////////////////////////////
-#//////////////////////////////////////////////////////////////////////////
-#
-# WARNING: SCRIPT IN DEVELOPMENT
-#
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 #-----------------------------------------------------------+
 #                                                           |
 # phyimport.pl - Import data from common file formats       |
@@ -15,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/01/2007                                       |
-# UPDATED: 06/15/2007                                       |
+# UPDATED: 06/18/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Import NEXUS and Newick files from text files to the     |
@@ -34,19 +27,23 @@
 #   as the nodes used in the database so the DB ID will
 #   need to be fetched when adding edges to the database.
 # - Add taxa to the biosql database and add taxa information
-#   from the tree to the PhyloDB node table
+#   from the tree to the PhyloDB node table. This would required
+#   using the taxon_id field in the node table
+# - Add edge_attribute data when available
  
 =head1 NAME 
 
-PhyImport.pl - Import phylogenetic trees from common file formats
+phyimport.pl - Import phylogenetic trees from common file formats
 
 =head1 SYNOPSIS
 
   Usage: PhyImport.pl
         --dsn        # The DSN string the database to connect to
-        --infile     # Input tree file to 
-        --dbuser     # user name to connect with
-        --dbpass     # password to connect with
+                     # Must conform to:
+                     # 'DBI:mysql:database=biosql;host=localhost' 
+        --infile     # Full path to the tree file to import to the db
+        --dbuser     # User name to connect with
+        --dbpass     # Password to connect with
         --dbname     # Name of database to use
         --driver     # "mysql", "Pg", "Oracle" (default "mysql")
         --host       # optional: host to connect with
@@ -115,7 +112,7 @@ James C. Estill E<lt>JamesEstill at gmail.comE<gt>
 
 =cut
 
-print "Staring PhyImport ..\n";
+print "Staring $0 ..\n";
 
 #-----------------------------+
 # INCLUDES                    |
@@ -215,8 +212,6 @@ unless ($dsn) {
 # so I may need to get rid of this or modify it 
 # if it crashes on other OS's
 
-# Commented out while I work through fetching the tree structure
-
 unless ($pass) {
     print "\nEnter password for the user $usrname\n";
     system('stty', '-echo') == 0 or die "can't turn off echo: $?";
@@ -273,8 +268,10 @@ while( $tree = $tree_in->next_tree ) {
 # It may be useful to print the number of leaf nodes here
 #    my @taxa = $tree->get_leaf_nodes;
 #    my $NumTax = @taxa;    
-
-
+    my @taxa = $tree->get_leaf_nodes;
+    my $num_tax = @taxa;  
+    print "NUM TAXA:\t$num_tax\n";
+    
     #-----------------------------+
     # TREE NAME                   |
     #-----------------------------+
@@ -285,7 +282,7 @@ while( $tree = $tree_in->next_tree ) {
     # tree name has already been used, then append the tree num
     # to the $tree_name variable
     if ($tree->id) {
-	print $tree->id."\n";
+	#print $tree->id."\n";
     } elsif ($tree_name){
 	$tree->id($tree_name);
 	print "\tNo tree id was given.\n";
@@ -339,13 +336,8 @@ while( $tree = $tree_in->next_tree ) {
     my @all_nodes = $tree->get_nodes;
 
     my $num_nodes = @all_nodes;
-    print "NUM NODES: $num_nodes\n";
+    print "\tNUM NODES: $num_nodes\n";
 
-
-    # Add nodes to the database, and then convert the node id
-    # from the name given in the input file to the name to be
-    # used in the database
-    
     foreach my $ind_node (@all_nodes) {
 	
 	$statement = "INSERT INTO node (tree_id) VALUES (?)";
@@ -365,33 +357,16 @@ while( $tree = $tree_in->next_tree ) {
 	    $sth = &prepare_sth($dbh,$statement);
 	    execute_sth($sth, $ind_node->id, $node_db_id );
 	}
-
-	# I would like to be able to set the Node->Id here for the
-	# tree object. The alternative is to make a reference hash
-	# that allows me to go from TreeObject internal id to
-	# the id in the database.
-
+	
 	# Reset the tree object id to the database id
 	# this will be used below to add edges to the database so
 	# we need to be careful and just die if this does not work
 	$ind_node->id($node_db_id) || 
 	    die "The Tree Object Node ID can not be set\n";
 	
-        # First check to see that an id exists and then
-	# load the information into the node_attribute table
-
     } # End of for each IndNode
     
     $dbh->commit();
-
-
-    # NOTE: It will be possible here to load the
-    # node to the database first before loading the edges.
-    # If the nodes have and id, this name will be loaded as 
-    # a node attribute. At this point, the node_id assigned
-    # by the database can be used to reset the value of 
-    # $node->id. Then further use of the nodes in describing
-    # edges can use $node-> to add edges
 
     #-----------------------------+
     # GET EDGES                   |
@@ -399,7 +374,7 @@ while( $tree = $tree_in->next_tree ) {
     # Need to cycle through the the nodes again since the node ids have
     # been changed to the Node Ids used by the biosql database.
 
-    print "\tPROCESSING EDGE DATA:\n";
+    print "PROCESSING EDGE DATA:\n";
     foreach my $ind_node (@all_nodes) {
 	
 	# First check to see that an id exists
@@ -457,6 +432,8 @@ while( $tree = $tree_in->next_tree ) {
     } else {
 	print "The tree is not rooted.\n";
 	
+	# QUESTION: WHAT TO ENTER FOR ROOT ID FOR AN UNROOTED TREE
+
 	# THE FOLLOWING WILL ONLY WORK FOR MYSQL
 	$statement = "UPDATE tree SET is_rooted = \'FALSE\'".
 	    " WHERE tree_id = ".$tree_db_id;
@@ -465,9 +442,6 @@ while( $tree = $tree_in->next_tree ) {
 	
     }
     $dbh->commit();
-
-    
-
 
     #-----------------------------+
     # INCREMENT TreeNum           |
