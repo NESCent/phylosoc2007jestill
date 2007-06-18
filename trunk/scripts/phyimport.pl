@@ -8,7 +8,7 @@
 #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 #-----------------------------------------------------------+
 #                                                           |
-# PhyImport.pl - Import data from common file formats       |
+# phyimport.pl - Import data from common file formats       |
 #                                                           |
 #-----------------------------------------------------------+
 #                                                           |
@@ -186,52 +186,7 @@ unless ($dsn) {
     $driver = "mysql" unless $driver;
     $dsn = "DBI:$driver:database=$db;host=$host";
 } else {
-    # Can parse the dsn using 
-    #DBI->parse_dsn($dsn);
     
-    # I had to upgrade DBI to try to get this to work
-    # and the results are not what I expected
-    print "DSN:\t$dsn\n";
-
-
-#    my ($t_scheme, $t_driver, $t_attr_string,
-#        $t_attr_hash, $t_driver_dsn);
-#    
-#    ($t_scheme, $t_driver, $t_attr_string, 
-##	$t_attr_hash, $t_driver_dsn) = DBI->parse_dsn($dsn)
-#     $t_attr_hash, $t_driver_dsn) = 
-#	 DBI->parse_dsn("DBI:MyDriver(RaiseError=>1):db=test;port=42")
-#	 || die "Can't parse DBI DSN '$dsn'";
-
-
-    my @artest = &parse_dsn("DBI:MyDriver(RaiseError=>1):db=test;port=42") 
-	|| die "Can't parse the DSN\n";
-    
-    print $artest[0]."\n";
-    print $artest[1]."\n";
-#    if ($t_scheme) {
-#	print "SCHEME:\t$t_scheme\n";
-#    }
-#    if ($t_driver) {
-#	print "DRIVER:\t$t_driver\n";
-#    }
-#    if ($t_attr_string){
-#	print "ATRSTR:\t$t_attr_string\n";
-#    }
-#    if ($t_attr_hash){
-#        print "ATRSTR:\t$t_attr_hash\n";
-#    }
-#    if ($t_driver_dsn) {
-#	print "DRIVERDSN:\t$t_driver_dsn\n";
-#    }
-
-
-    # Temp exit while I work through these variables
-    exit;
-    
-    
-# scheme is always dbi
-
     # We need to parse the database name, driver etc from the dsn string
     # in the form of DBI:$driver:database=$db;host=$host
     # Other dsn strings will not be parsed properly
@@ -315,7 +270,6 @@ while( $tree = $tree_in->next_tree ) {
 
     print "PROCESSING TREE NUM: $tree_num\n";
 
-
 # It may be useful to print the number of leaf nodes here
 #    my @taxa = $tree->get_leaf_nodes;
 #    my $NumTax = @taxa;    
@@ -394,14 +348,6 @@ while( $tree = $tree_in->next_tree ) {
     
     foreach my $ind_node (@all_nodes) {
 	
-	# Load the node into the database
-	# The tree_id is 
-	# The tree name is uniqe so can use 
-	# WHERE name = ?
-
-	#$statement = "INSERT INTO node (tree_id)".
-	#    " SELECT tree_id FROM tree WHERE name = ?";
-
 	$statement = "INSERT INTO node (tree_id) VALUES (?)";
 	
 	$sth = &prepare_sth($dbh,$statement);
@@ -480,7 +426,7 @@ while( $tree = $tree_in->next_tree ) {
 		    
 		    # Print output, node ids printed below
 		    # should match the integer ids used in the database
-		    print $anc->id;
+		    print "\t".$anc->id;
 		    print "-->";
 		    print $ind_node->id;
 		    print "\n";
@@ -491,37 +437,37 @@ while( $tree = $tree_in->next_tree ) {
 
     $dbh->commit();
 
-    #///////////////////////////////////////
-    # Temp exit while I work through this
-    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-    $dbh->disconnect;
-    exit;
-
     #-----------------------------+
-    # DETERMINE IF TREE IS ROOTED |
+    # ADD TREE ROOT INFO          |
     #-----------------------------+
     # IT may be better to do this after all nodes have been loaded
     # IF THE TREE IS ROOTED GET THE ROOT NODE 
     if ($tree->get_root_node) {
 	my $root = $tree->get_root_node;
-	# If the tree is rooted without an id, show the internal id
-	#if ($root->id) {
-	#    print "\tROOT:".$root->id."\n";
-	#} else {
-	#    print "\tROOT INTERNAL ID:".$root->internal_id."\n";
-	#}
-	#$statement = "INSERT INTO node (tree_id) VALUES ($id) ";
-
-
+	# Since all nodes were assigned an id above, using the
+	# biosql values, this should return the root id as used
+	# in the database
+	print "The tree is rooted.\n";
+	print "\tRoot:".$root->id."\n";
+	# UPDATE tree table
+	$statement = "UPDATE tree SET node_id = ".$root->id.
+	    " WHERE tree_id = ".$tree_db_id;
+	$sth = prepare_sth($dbh,$statement);
+	execute_sth($sth);
     } else {
 	print "The tree is not rooted.\n";
 	
-	# SET is_rooted to FALSE
-	#$statement = "";
+	# THE FOLLOWING WILL ONLY WORK FOR MYSQL
+	$statement = "UPDATE tree SET is_rooted = \'FALSE\'".
+	    " WHERE tree_id = ".$tree_db_id;
+	$sth = prepare_sth($dbh,$statement);
+	execute_sth($sth);
+	
     }
     $dbh->commit();
+
     
-    # INSERT ROOT NODE IN node either now or later 
+
 
     #-----------------------------+
     # INCREMENT TreeNum           |
@@ -533,7 +479,7 @@ while( $tree = $tree_in->next_tree ) {
 
 # End of program
 $dbh->disconnect();
-print "\nPhyImport.pl has finished.\n";
+print "\n$0 has finished.\n";
 exit;
 
 #-----------------------------------------------------------+
@@ -679,6 +625,8 @@ sub last_insert_id {
 
 # The following pulled directly from the DBI module
 # this is an attempt to see if I can get the DSNs to parse 
+# for some reason, this is returning the driver information in the
+# place of scheme
 sub parse_dsn {
     my ($dsn) = @_;
     $dsn =~ s/^(dbi):(\w*?)(?:\((.*?)\))?://i or return;
@@ -733,4 +681,5 @@ Updated: 06/18/2007
 # 06/18/2007
 # - Trying to get parse_dsn to work. Moving the subfunction from
 #   the DB module
-# - 
+# - Changed name to lowercase phyimport.pl
+# - Add root node id to tree
