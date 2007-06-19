@@ -29,6 +29,9 @@
 #
 # TO DO:
 # - Update POD documentation
+#
+# NOTE:
+# - This will initially only support export of a single tree.
  
 =head1 NAME 
 
@@ -40,7 +43,7 @@ phyexport.pl - Export phylodb data to common file formats
         --dsn        # The DSN string the database to connect to
                      # Must conform to:
                      # 'DBI:mysql:database=biosql;host=localhost' 
-        --infile     # Full path to the tree file to import to the db
+        --outfile    # Full path to output file that will be created.
         --dbuser     # User name to connect with
         --dbpass     # Password to connect with
         --dbname     # Name of database to use
@@ -49,18 +52,26 @@ phyexport.pl - Export phylodb data to common file formats
         --help       # Print this help message
         --quiet      # Run the program in quiet mode.
         --format     # "newick", "nexus" (default "newick")
-        --tree       # Tree name to use
+        --tree       # Name of the tree to export
 
 =head1 DESCRIPTION
 
-Import NEXUS and Newick files from text files to the PhyloDB.
+Export a phylodb Tree to a specified output format.
 
 =head1 ARGUMENTS
 
 =over
 
-=item -d, --dsn
+=item -o, --outfile
 
+The full path of the output file that will be created.
+
+=item -f, --format
+    
+    File format to export the tree to [ie NEXUS].
+    
+=item -d, --dsn
+    
 the DSN of the database to connect to; default is the value in the
 environment variable DBI_DSN. If DBI_DSN has not been defined and
 the string is not passed to the command line, the dsn will be 
@@ -121,6 +132,8 @@ use DBI;
 use Getopt::Long;
 use Bio::TreeIO;                # creates Bio::Tree::TreeI objects
 use Bio::Tree::TreeI;
+use Bio::Tree::Node;
+use Bio::Tree::NodeI;
 
 #-----------------------------+
 # VARIABLE SCOPE              |
@@ -136,9 +149,11 @@ my $driver;                    # Database driver (ie. mysql)
 my $help = 0;                  # Display help
 my $quiet = 0;                 # Run the program in quiet mode
                                # will not prompt for command line options
-my $tree_name;                  # The name of the tree
+my $tree_name;                 # The name of the tree
                                # For files with multiple trees, this may
                                # be used as a base name to name the trees with
+my @trees;                     # Array holding the names of the trees that will
+                               # be exported
 my $statement;                 # Var to hold SQL statement string
 my $sth;                       # Statement handle for SQL statement object
 
@@ -230,6 +245,127 @@ END {
     &end_work($dbh);
 }
 
+#-----------------------------+
+# PREPARE SQL STATEMENTS      |
+#-----------------------------+
+my $sel_trees = &prepare_sth($dbh, "SELECT name FROM tree");
+my $sel_root = &prepare_sth($dbh, 
+			    "SELECT n.node_id, n.label FROM tree t, node n "
+			    ."WHERE t.node_id = n.node_id AND t.name = ?");
+my $sel_chld = &prepare_sth($dbh, 
+			    "SELECT n.node_id, n.label, e.edge_id "
+			    ."FROM node n, edge e "
+			    ."WHERE n.node_id = e.child_node_id "
+			    ."AND e.parent_node_id = ?");
+my $sel_attrs = &prepare_sth($dbh,
+			     "SELECT t.name, eav.value "
+			     ."FROM term t, edge_attribute_value eav "
+			     ."WHERE t.term_id = eav.term_id "
+			     ."AND eav.edge_id = ?");
+
+#-----------------------------+
+# GET THE TREES TO PROCESS    |
+#-----------------------------+
+# Check to see if the tree does exist in the database
+# throw error message if it does not
+
+# Multiple trees can be passed in the command lined
+# we therefore need to split tree name into an array
+if ($tree_name) {
+    @trees = split(/,/ $tree_name);
+}
+
+exit;
+
+# Add warning here to tell the user how many trees will be 
+# created if a single tree was not specified
+
+
+if (! (@trees && $trees[0])) {
+    @trees = ();
+    execute_sth($sel_trees);
+    while (my $row = $sel_trees->fetchrow_arrayref) {
+	push(@trees,$row->[0]);
+    }
+}
+
+
+#-----------------------------+
+# CREATE A NEW TREE OBJECT    |
+#-----------------------------+
+# and set the root
+my $tree = new Bio::Tree::Tree() ||
+    die "Can not create the tree object.\n";
+
+#-----------------------------+
+# GET THE ROOT NODE           |
+#-----------------------------+
+my $node = new Bio::Tree::Node( '-id' => 'estill, james');
+$tree->set_root_node($node);
+
+# available args
+# Args    : -descendents   => arrayref of descendents (they will be
+#                             updated s.t. their ancestor point is this
+#                             node)
+#           -branch_length => branch length [integer] (optional)
+#           -bootstrap     => value   bootstrap value (string)
+#           -description   => description of node
+#           -id            => human readable id for node
+
+
+#$tree->set_root_node($node);
+
+
+# Example of adding a child node
+#
+#my $nodeChild = new Bio::Tree::Node( '-id' => 'estill, jack');
+#$node->add_Descendent($nodeChild);
+
+my $nodeChild = new Bio::Tree::Node( '-id' => 'estill, jack');
+$node->add_Descendent($nodeChild);
+
+# NOTE - Branch length is the length between the node and its ancestor
+# so the branch length should be added to the node after its child
+# has been added
+
+# FOR EVERY DESCENDENT FROM THE
+# ROOT NODE
+
+# Add a new node to the Tree object
+
+
+
+# After all of the nodes have been added
+# Add the id of the node from node.label
+
+
+#-----------------------------+
+# EXPORT THE TREE OBJECT      |
+#-----------------------------+
+my $treeio = new Bio::TreeIO( '-format' => 'newick' );
+
+print "OUTPUT TREE AS NEWICK:\n";
+$treeio->write_tree($tree);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # End of program
 print "\n$0 has finished.\n";
@@ -238,6 +374,98 @@ exit;
 #-----------------------------------------------------------+
 # SUBFUNCTIONS                                              |
 #-----------------------------------------------------------+
+
+sub load_tree_nodes {
+
+# this subfunction is called recursively to fetch all of the chilren
+# of a tree
+# modified from print_tree_nodes subfunction
+# the difference is that information is loaded to the $tree object
+# instead of printing a text file. The required sql is passed
+# to the subfunction
+
+    my $sel_chld_sth = shift;
+    my $root = shift;
+    my $sel_attrs = shift;
+    my @children = ();
+
+    &execute_sth($sel_chld_sth,$root->[0]);
+    
+    while (my $child = $sel_chld_sth->fetchrow_arrayref) {
+        push(@children, [@$child]);
+    }
+    
+
+    print "(" if @children;
+    for(my $i = 0; $i < @children; $i++) {
+        print "," unless $i == 0;
+        &load_tree_nodes($sel_chld_sth, $children[$i], $sel_attrs);
+    }
+    print ")" if @children;
+
+    print $root->[1] if $root->[1];
+
+    if (@$root > 2) {
+        execute_sth($sel_attrs,$root->[2]);
+        my %attrs = ();
+        while (my $row = $sel_attrs->fetchrow_arrayref) {
+            $attrs{$row->[0]} = $row->[1];
+        }
+        print $attrs{'support value'} if $attrs{'support value'};
+        print ":".$attrs{'branch length'} if $attrs{'branch length'};
+    }
+
+} # end of load_tree_nodes
+
+sub export_trees {
+# Modified from the print_trees subfunction
+# the trees are loaded to an array
+#use the subfunction like: export_trees($dbh, $tree);
+# where $dbh is the database handle and
+# $tree is the name of the tree to print
+    my $dbh = shift;
+    my @trees = @_;
+    my $sel_trees = prepare_sth($dbh, "SELECT name FROM tree");
+    my $sel_root = prepare_sth($dbh, 
+                               "SELECT n.node_id, n.label FROM tree t, node n "
+                               ."WHERE t.node_id = n.node_id AND t.name = ?");
+    my $sel_chld = prepare_sth($dbh, 
+                               "SELECT n.node_id, n.label, e.edge_id "
+                               ."FROM node n, edge e "
+                               ."WHERE n.node_id = e.child_node_id "
+                               ."AND e.parent_node_id = ?");
+    my $sel_attrs = prepare_sth($dbh,
+                                "SELECT t.name, eav.value "
+                                ."FROM term t, edge_attribute_value eav "
+                                ."WHERE t.term_id = eav.term_id "
+                                ."AND eav.edge_id = ?");
+
+    # If the trees variable was not passed to the subfunction
+    # select the names of all of the trees in the database
+    # and load the names to the @trees subfunction
+    if (! (@trees && $trees[0])) {
+        @trees = ();
+        execute_sth($sel_trees);
+        while (my $row = $sel_trees->fetchrow_arrayref) {
+            push(@trees,$row->[0]);
+        }
+    }
+
+    # For each tree in the array get the root node
+    foreach my $tree (@trees) {
+        execute_sth($sel_root, $tree);
+        my $root = $sel_root->fetchrow_arrayref;
+        if ($root) {
+            print ">$tree ";
+        } else {
+            print STDERR "no tree with name '$tree'\n";
+            next;
+        }
+        &load_tree_nodes($sel_chld,$root,$sel_attrs);
+    } # End of for each tree
+
+} # End of print_trees subfunction
+
 
 sub end_work {
 # Copied from load_itis_taxonomy.pl
@@ -394,7 +622,7 @@ sub parse_dsn {
 
 Started: 06/18/2007
 
-Updated: 06/18/2007
+Updated: 06/19/2007
 
 =cut
 
@@ -403,3 +631,10 @@ Updated: 06/18/2007
 #-----------------------------------------------------------+
 # 06/18/2007 - JCE
 # - Started program, copied subfunctions from phyimport.pl
+# - Added print_trees subfunction from print-trees.pl
+# - Added print_tree_nodes subfunction from print-trees.pl
+# 
+# 06/19/2007 - JCE
+# - added the create a new tree object and tested adding
+#   nodes to the tree
+#
