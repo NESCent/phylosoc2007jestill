@@ -15,7 +15,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/18/2007                                       |
-# UPDATED: 06/18/2007                                       |
+# UPDATED: 06/19/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Export data from the PhyloDb database to common file     |
@@ -152,7 +152,7 @@ my $quiet = 0;                 # Run the program in quiet mode
 my $tree_name;                 # The name of the tree
                                # For files with multiple trees, this may
                                # be used as a base name to name the trees with
-my @trees;                     # Array holding the names of the trees that will
+my @trees = ();                # Array holding the names of the trees that will
                                # be exported
 my $statement;                 # Var to hold SQL statement string
 my $sth;                       # Statement handle for SQL statement object
@@ -212,6 +212,7 @@ unless ($dsn) {
     print "\tSUF:\t$suffix\n";
     print "\tDB:\t$db\n";
     print "\tHOST:\t$host\n";
+    print "\tTREES\t$tree_name\n";
 }
 
 
@@ -272,13 +273,10 @@ my $sel_attrs = &prepare_sth($dbh,
 # Multiple trees can be passed in the command lined
 # we therefore need to split tree name into an array
 if ($tree_name) {
-    @trees = split(/,/ $tree_name);
+    @trees = split( /\,/ , $tree_name );
+} else {
+    print "No tree name issued at the command line.\n";
 }
-
-exit;
-
-# Add warning here to tell the user how many trees will be 
-# created if a single tree was not specified
 
 
 if (! (@trees && $trees[0])) {
@@ -288,6 +286,40 @@ if (! (@trees && $trees[0])) {
 	push(@trees,$row->[0]);
     }
 }
+
+
+# Add warning here to tell the user how many trees will be 
+# created if a single tree was not specified
+
+
+## SHOW THE TREES THAT WILL BE PROCESSED
+my $num_trees = @trees;
+print "TREES TO EXPORT ($num_trees)\n";
+foreach my $IndTree (@trees) {
+    print "\t$IndTree\n";
+}
+
+
+# For each tree in the array get the root node
+foreach my $ind_tree (@trees) {
+    execute_sth($sel_root, $ind_tree);
+    my $root = $sel_root->fetchrow_arrayref;
+    if ($root) {
+	print "\nProcessing tree: $ind_tree \n";
+    } else {
+	print STDERR "no tree with name '$ind_tree'\n";
+	next;
+    }
+    
+    &load_tree_nodes($sel_chld,$root,$sel_attrs);
+
+} # End of for each tree
+
+
+exit;
+
+
+
 
 
 #-----------------------------+
@@ -388,6 +420,8 @@ sub load_tree_nodes {
     my $root = shift;
     my $sel_attrs = shift;
     my @children = ();
+
+    print "\tLoading child nodes.\n";
 
     &execute_sth($sel_chld_sth,$root->[0]);
     
@@ -637,4 +671,5 @@ Updated: 06/19/2007
 # 06/19/2007 - JCE
 # - added the create a new tree object and tested adding
 #   nodes to the tree
-#
+# - Moving the subfunction for each tree to the main body
+#   of the code
