@@ -249,10 +249,13 @@ END {
 #-----------------------------+
 # PREPARE SQL STATEMENTS      |
 #-----------------------------+
+# The following works in MySQL 06/20/2007
 my $sel_trees = &prepare_sth($dbh, "SELECT name FROM tree");
+# The following works in MySQL 06/20/2007
 my $sel_root = &prepare_sth($dbh, 
 			    "SELECT n.node_id, n.label FROM tree t, node n "
 			    ."WHERE t.node_id = n.node_id AND t.name = ?");
+
 my $sel_chld = &prepare_sth($dbh, 
 			    "SELECT n.node_id, n.label, e.edge_id "
 			    ."FROM node n, edge e "
@@ -306,6 +309,8 @@ foreach my $ind_tree (@trees) {
     my $root = $sel_root->fetchrow_arrayref;
     if ($root) {
 	print "\nProcessing tree: $ind_tree \n";
+#	print "\tRooted: $root\n"
+	print "\tRoot Node: ".$root->[0]."\n"
     } else {
 	print STDERR "no tree with name '$ind_tree'\n";
 	next;
@@ -317,8 +322,6 @@ foreach my $ind_tree (@trees) {
 
 
 exit;
-
-
 
 
 

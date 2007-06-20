@@ -392,9 +392,14 @@ while( $tree = $tree_in->next_tree ) {
 			" VALUES (?,?)";
 		    my $edge_sth = &prepare_sth($dbh,$statement);
 		    
-		    execute_sth($edge_sth, 
-				$ind_node->id, 
-				$anc->id);
+# The following is backwards 06/20/2007
+#		    execute_sth($edge_sth, 
+#				$ind_node->id, 
+#				$anc->id);
+
+		    execute_sth($edge_sth,
+				$anc->id,
+				$ind_node->id);
 		    my $edge_db_id = last_insert_id($dbh,"edge", $driver);
 		    
 		    # TO DO: Add edge related information here
