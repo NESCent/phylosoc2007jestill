@@ -29,6 +29,9 @@
 #
 # TO DO:
 # - Update POD documentation
+# - Allow for using a root_name to name all of the output trees
+#   or use the tree_name from the database as the output name
+#   when exporting trees.
 #
 # NOTE:
 # - This will initially only support export of a single tree.
@@ -342,7 +345,7 @@ foreach my $ind_tree (@trees) {
     my $root = $sel_root->fetchrow_arrayref;
     if ($root) {
 	print "\nProcessing tree: $ind_tree \n";
-	print "\tRoot Node: ".$root->[0]."\n";
+	#print "\tRoot Node: ".$root->[0]."\n";
 	
 	# ADD THE ROOT NODE TO THE TREE OBJECT
 	my $node = new Bio::Tree::Node( '-id' => $root->[0]);
@@ -351,7 +354,6 @@ foreach my $ind_tree (@trees) {
 	# test of find node here, this appears to work 06/22/2007
 	my @par_node = $tree->find_node( -id => $root->[0] );
 	my $num_par_nodes = @par_node;
-	print "\tTEST NUM PAR NODES:$num_par_nodes\n";
 	
     } else {
 
@@ -430,8 +432,10 @@ foreach my $ind_tree (@trees) {
     my $treeio = new Bio::TreeIO( '-format' => $format,
 				  '-file' => '>$outfile')
 	|| die "Could not open output file:\n$outfile\n";
-    
+
     $treeio->write_tree($tree);
+    print "\tTree exported to:\n\t$outfile\n";
+    
 
 } # End of for each tree
 
@@ -447,25 +451,11 @@ exit;
 
 sub load_tree_nodes {
 
-# Jamie changed this to modify the tree object
-# this subfunction is called recursively to fetch all of the chilren
-# of a tree
-# modified from print_tree_nodes subfunction
-# the difference is that information is loaded to the $tree object
-# instead of printing a text file. The required sql is passed
-# to the subfunction
-
     my $sel_chld_sth = shift;# SQL to select children
     my $root = shift;        # reference to the root
     my $sel_attrs = shift;   # SQL to select attributes
-    #my $tree = shift; # Not needed if I am using package level vars
 
     my @children = ();
-
-    #print "\tLoading child nodes.\n";
-    # JCE ADDED THE FOLLOWING
-    #print "\n";
-
 
     &execute_sth($sel_chld_sth,$root->[0]);
 
@@ -474,10 +464,9 @@ sub load_tree_nodes {
         push(@children, [@$child]);
     }
     
-
-    #print "\t(" if @children;
-    # Orig below
-    #print "(" if @children;
+    # For all of the children, add the descendent node to
+    # the tree object and call the load_tree_nodes subfunction
+    # recursively for the resulting children nodes
     for(my $i = 0; $i < @children; $i++) {
 
 	# The following used for debug
@@ -689,8 +678,15 @@ Updated: 06/22/2007
 # - Moving the subfunction for each tree to the main body
 #   of the code
 #
-# 06/22/2007 - JCE
-# - Working with the TreeIO object
+# 06/21/2007 - JCE
+# - Working more with the Bio::Tree object
 #
 # 06/22/2007 - JCE
-# 
+# - Finally have a working base code to expand from
+# - Can export file to Bio::Tree supported formats
+# - Added bootstrap values to node objects
+# - Added edge lengths to node objects
+# - Added the original node id to the node object and 
+#   overwrite the id assigned by the database
+#   It may make sense to leave this if the user wants
+#   to pick branches to expand.
