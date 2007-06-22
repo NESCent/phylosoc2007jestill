@@ -282,9 +282,10 @@ my $sel_attrs = &prepare_sth($dbh,
 			     ."WHERE t.term_id = eav.term_id "
 			     ."AND eav.edge_id = ?");
 
-# Select the node label 
-my $sel_label = &prepare_sth($dbh,
-			     "SELECT label FROM node WHERE node_id = ?");
+# Currently doing the following as a fetch_node_label subfunction 
+## Select the node label 
+#my $sel_label = &prepare_sth($dbh,
+#			     "SELECT label FROM node WHERE node_id = ?");
 
 #-----------------------------+
 # GET THE TREES TO PROCESS    |
@@ -413,7 +414,6 @@ foreach my $ind_tree (@trees) {
 	my $node_label = fetch_node_label($dbh, $ind_node->id());
 	
 	if ($node_label) {
-	    print "\tOUT LABEL:$node_label\n";
 	    $ind_node->id($node_label);
 	} else {
 	    $ind_node->id('');
@@ -421,99 +421,24 @@ foreach my $ind_tree (@trees) {
 	
     }
     
-
-    # Node name as used in the input file
-    # This will need to be loaded last since the id used 
-    # throughout the script is the db id for the node
-
-
     #-----------------------------+
     # EXPORT TREE FORMAT          |
     #-----------------------------+
-    my $treeio = new Bio::TreeIO( '-format' => $format );
+    # The following two lines used for code testing
+    #my $treeio = new Bio::TreeIO( '-format' => $format );
+    #print "OUTPUT TREE AS $format:\n";
+    my $treeio = new Bio::TreeIO( '-format' => $format,
+				  '-file' => '>$outfile')
+	|| die "Could not open output file:\n$outfile\n";
     
-    print "OUTPUT TREE AS $format:\n";
     $treeio->write_tree($tree);
 
 } # End of for each tree
 
 
-exit;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#-----------------------------+
-# CREATE A NEW TREE OBJECT    |
-#-----------------------------+
-# and set the root
-my $tree = new Bio::Tree::Tree() ||
-    die "Can not create the tree object.\n";
-
-#-----------------------------+
-# GET THE ROOT NODE           |
-#-----------------------------+
-my $node = new Bio::Tree::Node( '-id' => 'estill, james');
-$tree->set_root_node($node);
-
-# available args
-# Args    : -descendents   => arrayref of descendents (they will be
-#                             updated s.t. their ancestor point is this
-#                             node)
-#           -branch_length => branch length [integer] (optional)
-#           -bootstrap     => value   bootstrap value (string)
-#           -description   => description of node
-#           -id            => human readable id for node
-
-
-#$tree->set_root_node($node);
-
-
-# Example of adding a child node
-#
-#my $nodeChild = new Bio::Tree::Node( '-id' => 'estill, jack');
-#$node->add_Descendent($nodeChild);
-
-my $nodeChild = new Bio::Tree::Node( '-id' => 'estill, jack');
-$node->add_Descendent($nodeChild);
-
-# NOTE - Branch length is the length between the node and its ancestor
-# so the branch length should be added to the node after its child
-# has been added
-
-# FOR EVERY DESCENDENT FROM THE
-# ROOT NODE
-
-# Add a new node to the Tree object
-
-
-
-# After all of the nodes have been added
-# Add the id of the node from node.label
-
-
-#-----------------------------+
-# EXPORT THE TREE OBJECT      |
-#-----------------------------+
-my $treeio = new Bio::TreeIO( '-format' => 'newick' );
-
-print "OUTPUT TREE AS NEWICK:\n";
-$treeio->write_tree($tree);
-
-
 # End of program
 print "\n$0 has finished.\n";
+
 exit;
 
 #-----------------------------------------------------------+
@@ -543,16 +468,9 @@ sub load_tree_nodes {
 
 
     &execute_sth($sel_chld_sth,$root->[0]);
-    
+
+    # Push results to the children array
     while (my $child = $sel_chld_sth->fetchrow_arrayref) {
-	# data getting pushed to the children array here
-
-	# I think that ancestor is $root->[0]
-	# all children are in the children array
-
-	#print $root->[0]."-->"."\n";
-
-	# Original code below
         push(@children, [@$child]);
     }
     
@@ -562,26 +480,8 @@ sub load_tree_nodes {
     #print "(" if @children;
     for(my $i = 0; $i < @children; $i++) {
 
-	#//////////////////////////////////////////////////
-	#/////////////////////////////////////////////////
-	#////////////////////////////////////////////////
-	# This is the place to load the node to the 
-	# tree object
-	#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-	#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-	#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-	print "\t||".$root->[0]."-->".$children[$i][0]."||\n";
-
-
-	# The root node should already exist
-	# Parent is to fetch the node where id is $root->id
-	#my $nodeParent = 
-
-
-	# The following three lines do work
-	#my @par_nodes = $PhyloDB::tree->find_node( -id => $root->[0] );
-	#my $par_num = @par_nodes;
-	#print "\t\t$par_num\n";
+	# The following used for debug
+	#print "\t||".$root->[0]."-->".$children[$i][0]."||\n";
 
 	my ($par_node) = $PhyloDB::tree->find_node( '-id' => $root->[0] );
 	
@@ -592,51 +492,6 @@ sub load_tree_nodes {
 	&load_tree_nodes($sel_chld_sth, $children[$i], $sel_attrs);
 
     }
-
-
-#    # Jamie may want to do this as a later step on the 
-#    # finished tree object
-#    # The first pass I just want to load the node id using
-#    # the id that is used in the database
-#    # If the node has name information
-#    if ($root->[1]) {
-#	# Load the name to the tree object
-#	print "\t".$root->[1] if $root->[1];
-#	# Original below
-#	#print $root->[1] if $root->[1];
-#    }
- 
-   
-    
-#    # IF ADDITINAL INFORMATION IS AVAILABLE FOR THE NODE
-#    if (@$root > 2) {
-#        execute_sth($sel_attrs,$root->[2]);
-#        my %attrs = ();
-#        while (my $row = $sel_attrs->fetchrow_arrayref) {
-#            $attrs{$row->[0]} = $row->[1];
-#        }
-#
-#	# to set the bootstrap of a node object
-#	#$child_node_obj->bootstrap($newval)
-#	# ie.
-#	# $child_node_obj->bootstrap( $attrs{'support value'} );
-#        print $attrs{'support value'} if $attrs{'support value'};
-#
-#	# to set the branch length of a node object
-#	#$child_node_obj->branch_length()
-#	# ie.
-#	#$child_node_obj->branch_length( $attrs{'branch length'}  )
-#        print ":".$attrs{'branch length'} if $attrs{'branch length'};
-#
-#    }
-
-
-
-    #////////////////////////////
-    # MAY NEED TO ADD RETURN FULL TREE HERE 
-    # AFTER FULL RECURSION
-    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-
 
 } # end of load_tree_nodes
 
