@@ -15,7 +15,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/18/2007                                       |
-# UPDATED: 06/19/2007                                       |
+# UPDATED: 06/22/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Export data from the PhyloDb database to common file     |
@@ -124,6 +124,9 @@ James C. Estill E<lt>JamesEstill at gmail.comE<gt>
 
 print "Staring $0 ..\n";
 
+#Package this as phytools for now
+package PhyloDB;
+
 #-----------------------------+
 # INCLUDES                    |
 #-----------------------------+
@@ -156,7 +159,15 @@ my @trees = ();                # Array holding the names of the trees that will
                                # be exported
 my $statement;                 # Var to hold SQL statement string
 my $sth;                       # Statement handle for SQL statement object
+#our $tree;                      # Tree object, this has to be a package
+#my $tree = new Bio::Tree::Tree() ||
+#	die "Can not create the tree object.\n";
 
+our $tree;                      # Tree object, this has to be a package
+#                               # level variable since we will modify this
+                                # in a subfunction below.
+                                # This is my first attempt to work with
+                                # a package level var.
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
@@ -249,23 +260,29 @@ END {
 #-----------------------------+
 # PREPARE SQL STATEMENTS      |
 #-----------------------------+
+
 # The following works in MySQL 06/20/2007
 my $sel_trees = &prepare_sth($dbh, "SELECT name FROM tree");
+
 # The following works in MySQL 06/20/2007
 my $sel_root = &prepare_sth($dbh, 
 			    "SELECT n.node_id, n.label FROM tree t, node n "
 			    ."WHERE t.node_id = n.node_id AND t.name = ?");
 
+# Select the child nodes
 my $sel_chld = &prepare_sth($dbh, 
 			    "SELECT n.node_id, n.label, e.edge_id "
 			    ."FROM node n, edge e "
 			    ."WHERE n.node_id = e.child_node_id "
 			    ."AND e.parent_node_id = ?");
+
+# Select edge attribute values
 my $sel_attrs = &prepare_sth($dbh,
 			     "SELECT t.name, eav.value "
 			     ."FROM term t, edge_attribute_value eav "
 			     ."WHERE t.term_id = eav.term_id "
 			     ."AND eav.edge_id = ?");
+
 
 #-----------------------------+
 # GET THE TREES TO PROCESS    |
@@ -302,26 +319,81 @@ foreach my $IndTree (@trees) {
     print "\t$IndTree\n";
 }
 
-
-# For each tree in the array get the root node
+#-----------------------------------------------------------+
+# FOR EACH INDIVIDUAL TREE IN THE TREES LIST                | 
+#-----------------------------------------------------------+
 foreach my $ind_tree (@trees) {
+ 
+
+    #-----------------------------+
+    # CREATE A NEW TREE OBJECT    |
+    #-----------------------------+
+    print "\tCreating a new tree object.\n";
+    $tree = new Bio::Tree::Tree() ||
+	die "Can not create the tree object.\n";
+
+    #-----------------------------+
+    # GET THE TREE ROOT           |
+    #-----------------------------+
     execute_sth($sel_root, $ind_tree);
     my $root = $sel_root->fetchrow_arrayref;
     if ($root) {
 	print "\nProcessing tree: $ind_tree \n";
-#	print "\tRooted: $root\n"
-	print "\tRoot Node: ".$root->[0]."\n"
+	print "\tRoot Node: ".$root->[0]."\n";
+	
+	# ADD THE ROOT NODE TO THE TREE OBJECT
+	my $node = new Bio::Tree::Node( '-id' => $root->[0]);
+	$tree->set_root_node($node);
+	
+	# test of find node here, this appears to work 06/22/2007
+	my @par_node = $tree->find_node( -id => $root->[0] );
+	my $num_par_nodes = @par_node;
+	print "\tTEST NUM PAR NODES:$num_par_nodes\n";
+	
     } else {
+
 	print STDERR "no tree with name '$ind_tree'\n";
 	next;
+
     }
-    
+
+    #-----------------------------+
+    # LOAD TREE NODES             |
+    #-----------------------------+
+    # This will need to load the tree nodes to the tre1e object
+    #&load_tree_nodes($sel_chld,$root,$sel_attrs, $tree);
     &load_tree_nodes($sel_chld,$root,$sel_attrs);
+
+    #-----------------------------+
+    # LOAD NODE VARIABLES         | 
+    #-----------------------------+
+    # Boostrap
+    # Edge length
+
+    #-----------------------------+
+    # EXPORT TREE FORMAT          |
+    #-----------------------------+
+    my $treeio = new Bio::TreeIO( '-format' => 'newick' );
+    
+    print "OUTPUT TREE AS NEWICK:\n";
+    $treeio->write_tree($tree);
 
 } # End of for each tree
 
 
 exit;
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -383,25 +455,6 @@ print "OUTPUT TREE AS NEWICK:\n";
 $treeio->write_tree($tree);
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # End of program
 print "\n$0 has finished.\n";
 exit;
@@ -412,6 +465,7 @@ exit;
 
 sub load_tree_nodes {
 
+# Jamie changed this to modify the tree object
 # this subfunction is called recursively to fetch all of the chilren
 # of a tree
 # modified from print_tree_nodes subfunction
@@ -419,89 +473,115 @@ sub load_tree_nodes {
 # instead of printing a text file. The required sql is passed
 # to the subfunction
 
-    my $sel_chld_sth = shift;
-    my $root = shift;
-    my $sel_attrs = shift;
+    my $sel_chld_sth = shift;# SQL to select children
+    my $root = shift;        # reference to the root
+    my $sel_attrs = shift;   # SQL to select attributes
+    #my $tree = shift; # Not needed if I am using package level vars
+
     my @children = ();
 
-    print "\tLoading child nodes.\n";
+    #print "\tLoading child nodes.\n";
+    # JCE ADDED THE FOLLOWING
+    #print "\n";
+
 
     &execute_sth($sel_chld_sth,$root->[0]);
     
     while (my $child = $sel_chld_sth->fetchrow_arrayref) {
+	# data getting pushed to the children array here
+
+	# I think that ancestor is $root->[0]
+	# all children are in the children array
+
+	#print $root->[0]."-->"."\n";
+
+	# Original code below
         push(@children, [@$child]);
     }
     
 
-    print "(" if @children;
+    #print "\t(" if @children;
+    # Orig below
+    #print "(" if @children;
     for(my $i = 0; $i < @children; $i++) {
-        print "," unless $i == 0;
-        &load_tree_nodes($sel_chld_sth, $children[$i], $sel_attrs);
-    }
-    print ")" if @children;
 
-    print $root->[1] if $root->[1];
+	#//////////////////////////////////////////////////
+	#/////////////////////////////////////////////////
+	#////////////////////////////////////////////////
+	# This is the place to load the node to the 
+	# tree object
+	#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+	#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+	#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+	print "\t||".$root->[0]."-->".$children[$i][0]."||\n";
 
-    if (@$root > 2) {
-        execute_sth($sel_attrs,$root->[2]);
-        my %attrs = ();
-        while (my $row = $sel_attrs->fetchrow_arrayref) {
-            $attrs{$row->[0]} = $row->[1];
-        }
-        print $attrs{'support value'} if $attrs{'support value'};
-        print ":".$attrs{'branch length'} if $attrs{'branch length'};
+
+	# The root node should already exist
+	# Parent is to fetch the node where id is $root->id
+	#my $nodeParent = 
+
+
+	# The following three lines do work
+	#my @par_nodes = $PhyloDB::tree->find_node( -id => $root->[0] );
+	#my $par_num = @par_nodes;
+	#print "\t\t$par_num\n";
+
+	my ($par_node) = $PhyloDB::tree->find_node( '-id' => $root->[0] );
+	
+	# Check here that @par_node contains only a single node object
+	my $nodeChild = new Bio::Tree::Node( '-id' => $children[$i][0] );
+	$par_node->add_Descendent($nodeChild);
+
+	&load_tree_nodes($sel_chld_sth, $children[$i], $sel_attrs);
+
     }
+
+
+#    # Jamie may want to do this as a later step on the 
+#    # finished tree object
+#    # The first pass I just want to load the node id using
+#    # the id that is used in the database
+#    # If the node has name information
+#    if ($root->[1]) {
+#	# Load the name to the tree object
+#	print "\t".$root->[1] if $root->[1];
+#	# Original below
+#	#print $root->[1] if $root->[1];
+#    }
+ 
+   
+    
+#    # IF ADDITINAL INFORMATION IS AVAILABLE FOR THE NODE
+#    if (@$root > 2) {
+#        execute_sth($sel_attrs,$root->[2]);
+#        my %attrs = ();
+#        while (my $row = $sel_attrs->fetchrow_arrayref) {
+#            $attrs{$row->[0]} = $row->[1];
+#        }
+#
+#	# to set the bootstrap of a node object
+#	#$child_node_obj->bootstrap($newval)
+#	# ie.
+#	# $child_node_obj->bootstrap( $attrs{'support value'} );
+#        print $attrs{'support value'} if $attrs{'support value'};
+#
+#	# to set the branch length of a node object
+#	#$child_node_obj->branch_length()
+#	# ie.
+#	#$child_node_obj->branch_length( $attrs{'branch length'}  )
+#        print ":".$attrs{'branch length'} if $attrs{'branch length'};
+#
+#    }
+
+
+
+    #////////////////////////////
+    # MAY NEED TO ADD RETURN FULL TREE HERE 
+    # AFTER FULL RECURSION
+    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
 
 } # end of load_tree_nodes
-
-sub export_trees {
-# Modified from the print_trees subfunction
-# the trees are loaded to an array
-#use the subfunction like: export_trees($dbh, $tree);
-# where $dbh is the database handle and
-# $tree is the name of the tree to print
-    my $dbh = shift;
-    my @trees = @_;
-    my $sel_trees = prepare_sth($dbh, "SELECT name FROM tree");
-    my $sel_root = prepare_sth($dbh, 
-                               "SELECT n.node_id, n.label FROM tree t, node n "
-                               ."WHERE t.node_id = n.node_id AND t.name = ?");
-    my $sel_chld = prepare_sth($dbh, 
-                               "SELECT n.node_id, n.label, e.edge_id "
-                               ."FROM node n, edge e "
-                               ."WHERE n.node_id = e.child_node_id "
-                               ."AND e.parent_node_id = ?");
-    my $sel_attrs = prepare_sth($dbh,
-                                "SELECT t.name, eav.value "
-                                ."FROM term t, edge_attribute_value eav "
-                                ."WHERE t.term_id = eav.term_id "
-                                ."AND eav.edge_id = ?");
-
-    # If the trees variable was not passed to the subfunction
-    # select the names of all of the trees in the database
-    # and load the names to the @trees subfunction
-    if (! (@trees && $trees[0])) {
-        @trees = ();
-        execute_sth($sel_trees);
-        while (my $row = $sel_trees->fetchrow_arrayref) {
-            push(@trees,$row->[0]);
-        }
-    }
-
-    # For each tree in the array get the root node
-    foreach my $tree (@trees) {
-        execute_sth($sel_root, $tree);
-        my $root = $sel_root->fetchrow_arrayref;
-        if ($root) {
-            print ">$tree ";
-        } else {
-            print STDERR "no tree with name '$tree'\n";
-            next;
-        }
-        &load_tree_nodes($sel_chld,$root,$sel_attrs);
-    } # End of for each tree
-
-} # End of print_trees subfunction
 
 
 sub end_work {
@@ -522,6 +602,7 @@ sub end_work {
 }
 
 sub in_format_check {
+    # TODO: Need to convert this to has lookup
     # This will try to make sense of the format string
     # that is being passed at the command line
     my ($In) = @_;  # Format string coming into the subfunction
@@ -645,6 +726,7 @@ sub last_insert_id {
 # this is an attempt to see if I can get the DSNs to parse 
 # for some reason, this is returning the driver information in the
 # place of scheme
+
 sub parse_dsn {
     my ($dsn) = @_;
     $dsn =~ s/^(dbi):(\w*?)(?:\((.*?)\))?://i or return;
@@ -659,7 +741,7 @@ sub parse_dsn {
 
 Started: 06/18/2007
 
-Updated: 06/19/2007
+Updated: 06/22/2007
 
 =cut
 
@@ -676,3 +758,9 @@ Updated: 06/19/2007
 #   nodes to the tree
 # - Moving the subfunction for each tree to the main body
 #   of the code
+#
+# 06/22/2007 - JCE
+# - Working with the TreeIO object
+#
+# 06/22/2007 - JCE
+# 
