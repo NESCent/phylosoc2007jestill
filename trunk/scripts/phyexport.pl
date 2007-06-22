@@ -162,7 +162,6 @@ my $sth;                       # Statement handle for SQL statement object
 #our $tree;                      # Tree object, this has to be a package
 #my $tree = new Bio::Tree::Tree() ||
 #	die "Can not create the tree object.\n";
-
 our $tree;                      # Tree object, this has to be a package
 #                               # level variable since we will modify this
                                 # in a subfunction below.
@@ -253,9 +252,9 @@ my $dbh = &connect_to_db($dsn, $usrname, $pass);
 #-----------------------------+
 # EXIT HANDLER                |
 #-----------------------------+
-END {
-    &end_work($dbh);
-}
+#END {
+#    &end_work($dbh);
+#}
 
 #-----------------------------+
 # PREPARE SQL STATEMENTS      |
@@ -283,6 +282,9 @@ my $sel_attrs = &prepare_sth($dbh,
 			     ."WHERE t.term_id = eav.term_id "
 			     ."AND eav.edge_id = ?");
 
+# Select the node label 
+my $sel_label = &prepare_sth($dbh,
+			     "SELECT label FROM node WHERE node_id = ?");
 
 #-----------------------------+
 # GET THE TREES TO PROCESS    |
@@ -367,15 +369,70 @@ foreach my $ind_tree (@trees) {
     #-----------------------------+
     # LOAD NODE VARIABLES         | 
     #-----------------------------+
-    # Boostrap
-    # Edge length
+    # At this point, all of the nodes should be loaded to the tree object
+    my @all_nodes = $tree->get_nodes;
+    
+    foreach my $ind_node (@all_nodes) {
+	
+        &execute_sth($sel_attrs,$ind_node);
+	
+        my %attrs = ();
+
+        while (my $row = $sel_attrs->fetchrow_arrayref) {
+            $attrs{$row->[0]} = $row->[1];
+        }
+
+	#-----------------------------+
+	# BOOTSTRAP                   |
+	#-----------------------------+
+	# Example of adding the boostrap info
+	#$ind_node->bootstrap('99');
+	# Example of fetching support value from the attrs
+        #$attrs{'support value'} if $attrs{'support value'};
+	if ( $attrs{'support value'} ) {
+	    #print "\t\tSUP:".$attrs{'support value'}."\n";
+	    $ind_node->bootstrap( $attrs{'support value'} );
+	}
+	
+	#-----------------------------+
+	# BRANCH LENGTH               |
+	#-----------------------------+
+	# Example of adding the branch length info 
+	#$ind_node->branch_length('10');
+	# Example of fetching the branch length from the attrs
+        #print ":".$attrs{'branch length'} if $attrs{'branch length'}
+	if ($attrs{'branch length'} ) {
+	    $ind_node->branch_length( $attrs{'branch length'} );
+	}
+
+	#-----------------------------+
+	# SET NODE ID                 |
+	#-----------------------------+
+	# If null in the original tree, put null here
+	#my $sql = "SELECT label FROM node WHERE node_id = $ind_node";
+	my $node_label = fetch_node_label($dbh, $ind_node->id());
+	
+	if ($node_label) {
+	    print "\tOUT LABEL:$node_label\n";
+	    $ind_node->id($node_label);
+	} else {
+	    $ind_node->id('');
+	}
+	
+    }
+    
+
+    # Node name as used in the input file
+    # This will need to be loaded last since the id used 
+    # throughout the script is the db id for the node
+
 
     #-----------------------------+
     # EXPORT TREE FORMAT          |
     #-----------------------------+
-    my $treeio = new Bio::TreeIO( '-format' => 'newick' );
+    my $treeio = new Bio::TreeIO( '-format' => $format );
     
-    print "OUTPUT TREE AS NEWICK:\n";
+    print "OUTPUT TREE AS $format:\n";
     $treeio->write_tree($tree);
 
 } # End of for each tree
@@ -583,6 +640,24 @@ sub load_tree_nodes {
 
 } # end of load_tree_nodes
 
+
+sub fetch_node_label {
+
+    # $dbh is the database handle
+    # $node_id is the database node_id
+    my ($dbh, $node_id) = @_;
+    my ($sql, $cur, $result, @row);
+    
+    $sql = "SELECT label FROM node WHERE node_id = $node_id";
+    $cur = $dbh->prepare($sql);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    $result=$row[0];
+    $cur->finish();
+    #print "\t\t$result\n";
+    return $result;
+
+}
 
 sub end_work {
 # Copied from load_itis_taxonomy.pl
