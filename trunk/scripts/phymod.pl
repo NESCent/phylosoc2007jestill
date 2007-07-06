@@ -3,6 +3,7 @@
 #////////////////////////////////////////////////////////////
 #
 # WARNING: SCRIPT UNDER CURRENT DEVEOPMENT
+# WORKING ON DELETION OF NODE AND CHILDREN CURRENTLY
 #
 #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -26,6 +27,7 @@
 #  http://www.gnu.org/licenses/lgpl.html                    |  
 #                                                           |
 #-----------------------------------------------------------+
+# 
 #
 # TO DO:
 # - Update POD documentation
@@ -46,6 +48,9 @@ phymod.pl - Modifiy trees in the PhyloDB database
         --dbname     # Name of database to use
         --driver     # "mysql", "Pg", "Oracle" (default "mysql")
         --host       # optional: host to connect with
+        --cut        # Node to cut
+        --copy       # Node to copy
+        --paste      # Node to paste
         --help       # Print this help message
         --quiet      # Run the program in quiet mode.
         --format     # "newick", "nexus" (default "newick")
@@ -154,7 +159,8 @@ use Bio::Tree::NodeI;
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
 my $dsn = $ENV{DBI_DSN};       # DSN for database connection
-my $outfile;                   # Full path to output file to create
+my $infile;                    # Full path to infile for adding
+                               # tree to the database. 
 my $format = 'newick';         # Data format used in infile
 my $db;                        # Database name (ie. biosql)
 my $host;                      # Database host (ie. localhost)
@@ -190,25 +196,32 @@ my $cut_node;                   # Node that will be source of cut
 my $copy_node;                  # Node that will be source of copy
 my $paste_node;                 # Node that will be source of paste
                                 # for the tree tree_name
+my $oper;                       # The operation that is being requested
+                                # -delete, cut, copy
+
+#-----------------------------+
+# USAGE                       |
+#-----------------------------+
+# TO DO: Add full set of usage statements
+my $usage = "\nphymod.pl -h for help\n";
 
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
-my $ok = GetOptions("d|dsn=s"     => \$dsn,
-                    "u|dbuser=s"  => \$usrname,
-                    "o|outfile=s" => \$outfile,
-                    "f|format=s"  => \$format,
-                    "p|dbpass=s"  => \$pass,
-		    "driver=s"    => \$driver,
-		    "dbname=s"    => \$db,
-		    "host=s"      => \$host,
-		    "t|tree=s"    => \$tree_name,
-#		    "parent-node" => \$node_parent,
-		    "q|quiet"     => \$quiet,
-		    "x|cut-node"  => \$cut_node,
-                    "c|copy-node" => \$copy_node,
-                    "v|paste-node"=> \$paste_node,
-		    "h|help"      => \$help);
+my $ok = GetOptions("d|dsn=s"       => \$dsn,
+                    "u|dbuser=s"    => \$usrname,
+		    "i|infile=s"    => \$infile,
+                    "f|format=s"    => \$format,
+                    "p|dbpass=s"    => \$pass,
+		    "driver=s"      => \$driver,
+		    "dbname=s"      => \$db,
+		    "host=s"        => \$host,
+		    "t|tree=s"      => \$tree_name,
+		    "q|quiet"       => \$quiet,
+		    "x|cut-node=s"  => \$cut_node,
+                    "c|copy-node=s" => \$copy_node,
+                    "v|paste-node=s"=> \$paste_node,
+		    "h|help"        => \$help);
 
 
 # Exit if format string is not recognized
@@ -254,15 +267,33 @@ unless ($dsn) {
     print "\tTREES\t$tree_name\n" if $tree_name;
 }
 
-
-# IT IS NOT POSSIBLE TO BOTH CUT AND COPY
+#-----------------------------+
+# DETERMINE THE REQUESTED     |
+# OPERATION                   |
+#-----------------------------+
+# Exit on nonsense combinations
 if ($copy_node && $cut_node) {
     print "\a";
     print "\nERROR: It is not possible to simultaneously cut and copy.\n\n";
+    exit;    
+}
+elsif ($cut_node && !$paste_node) {
+    $oper = "delete";
+}
+elsif ($paste_node && $cut_node) {
+    $oper = "cutnode";
+}
+elsif ($paste_node && $copy_node) {
+    $oper = "copynode";
+}else{
+    print "\nERROR: I don't understand your request.\n";
+    print "$usage\n";
     exit;
-    
 }
 
+
+#print "Requested operation is $oper\n";
+#exit;
 
 #-----------------------------+
 # GET DB PASSWORD             |
@@ -300,12 +331,22 @@ my $dbh = &connect_to_db($dsn, $usrname, $pass);
 
 
 
+if ($oper = "delete") {
+#-----------------------------+
+# DELETE                      |
+#-----------------------------+
+
+    # Warn the user about what would be deleted from
+    # the database
+    # Currently serving as a test that this is working
+    count_deleted_data($dbh, $cut_node) unless $quiet;
+    
+}
+
+
 # There will be a number of possible operations being requested
 
-#-----------------------------+
-# DELETE
-#-----------------------------+
-# CUT without a paste
+
 
 
 
@@ -325,6 +366,61 @@ exit;
 #-----------------------------------------------------------+
 
 #sub fetch_
+
+sub count_deleted_data {
+# Give the user info on the data that would be deleted
+    my ($dbh, $del_node_id) = @_;
+    my ($result, $cur,@row);
+
+    #-----------------------------+
+    # TABLE: count_node_path      |
+    #-----------------------------+
+    my $sql_count_node_path = 
+	"SELECT COUNT(*) FROM node_path".
+	" WHERE parent_node_id IN".
+	" (".
+	"  SELECT pt.node_id ".
+	"  FROM node_path p, edge e, node pt, node ch ".
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	"  AND ch.node_id = e.child_node_id".
+	"  AND p.parent_node_id = '$del_node_id'".
+	")";
+    $cur = $dbh->prepare($sql_count_node_path);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_node_path=$row[0];
+    $cur->finish();
+    
+    #-----------------------------+
+    # TABLE: node_attribute_value |
+    #-----------------------------+
+    my $sql_count_node_attribute =
+	"SELECT COUNT(*) FROM node_attribute_value". 
+	" WHERE node_id IN".
+	" (".
+	"  SELECT pt.node_id". 
+	"  FROM node_path p, edge e, node pt, node ch". 
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	"  AND ch.node_id = e.child_node_id".
+	"  AND p.parent_node_id = '$del_node_id'".
+	" )";
+
+    $cur = $dbh->prepare($sql_count_node_attribute);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_node_attribute=$row[0];
+    $cur->finish();
+
+    #print "$sql_count_node_path\n";
+    #print "RESULT: $res_count_node_path";
+    
+    print "\nThe following data will be deleted:\n";
+    print "\tnode_path ( $res_count_node_path records )\n";
+    print "\tnode_attribute_value ( $res_count_node_attribute records )\n";
+
+}
 
 sub load_tree_nodes {
 
