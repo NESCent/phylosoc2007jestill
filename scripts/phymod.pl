@@ -101,6 +101,19 @@ The database name to connect to; default is biosql.
 
 The database driver to connect with; default is mysql.
 Options other then mysql are currently not supported.
+
+=item -x, --cut-node
+
+The source node that will be cut from. When passed witout a paste
+the data will be deleted from the database.
+
+=item -c, --copy-node
+
+The source node that will be copied.
+
+=item -v, --paste-node
+
+Currently it is only possible to paste a node onto an existing node.
     
 =item -h, --help
 
@@ -173,7 +186,10 @@ our $tree;                      # Tree object, this has to be a package
                                 # in a subfunction below.
                                 # This is my first attempt to work with
                                 # a package level var.
-my $cut_node;                   #
+my $cut_node;                   # Node that will be source of cut
+my $copy_node;                  # Node that will be source of copy
+my $paste_node;                 # Node that will be source of paste
+                                # for the tree tree_name
 
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
@@ -187,14 +203,13 @@ my $ok = GetOptions("d|dsn=s"     => \$dsn,
 		    "dbname=s"    => \$db,
 		    "host=s"      => \$host,
 		    "t|tree=s"    => \$tree_name,
-		    "parent-node" => \$node_parent,
+#		    "parent-node" => \$node_parent,
 		    "q|quiet"     => \$quiet,
 		    "x|cut-node"  => \$cut_node,
                     "c|copy-node" => \$copy_node,
                     "v|paste-node"=> \$paste_node,
 		    "h|help"      => \$help);
 
-# TO DO: Normalize format to 
 
 # Exit if format string is not recognized
 #print "Requested format:$format\n";
@@ -240,6 +255,15 @@ unless ($dsn) {
 }
 
 
+# IT IS NOT POSSIBLE TO BOTH CUT AND COPY
+if ($copy_node && $cut_node) {
+    print "\a";
+    print "\nERROR: It is not possible to simultaneously cut and copy.\n\n";
+    exit;
+    
+}
+
+
 #-----------------------------+
 # GET DB PASSWORD             |
 #-----------------------------+
@@ -274,181 +298,21 @@ my $dbh = &connect_to_db($dsn, $usrname, $pass);
 # PREPARE SQL STATEMENTS      |
 #-----------------------------+
 
-# The following works in MySQL 06/20/2007
-my $sel_trees = &prepare_sth($dbh, "SELECT name FROM tree");
 
-# The following works in MySQL 06/20/2007
-my $sel_root = &prepare_sth($dbh, 
-			    "SELECT n.node_id, n.label FROM tree t, node n "
-			    ."WHERE t.node_id = n.node_id AND t.name = ?");
 
-# Select the child nodes
-my $sel_chld = &prepare_sth($dbh, 
-			    "SELECT n.node_id, n.label, e.edge_id "
-			    ."FROM node n, edge e "
-			    ."WHERE n.node_id = e.child_node_id "
-			    ."AND e.parent_node_id = ?");
-
-# Select edge attribute values
-my $sel_attrs = &prepare_sth($dbh,
-			     "SELECT t.name, eav.value "
-			     ."FROM term t, edge_attribute_value eav "
-			     ."WHERE t.term_id = eav.term_id "
-			     ."AND eav.edge_id = ?");
-
-# Currently doing the following as a fetch_node_label subfunction 
-## Select the node label 
-#my $sel_label = &prepare_sth($dbh,
-#			     "SELECT label FROM node WHERE node_id = ?");
+# There will be a number of possible operations being requested
 
 #-----------------------------+
-# GET THE TREES TO PROCESS    |
+# DELETE
 #-----------------------------+
-# Check to see if the tree does exist in the database
-# throw error message if it does not
-
-# Multiple trees can be passed in the command lined
-# we therefore need to split tree name into an array
-if ($tree_name) {
-    @trees = split( /\,/ , $tree_name );
-} else {
-    print "No tree name issued at the command line.\n";
-}
+# CUT without a paste
 
 
-if (! (@trees && $trees[0])) {
-    @trees = ();
-    execute_sth($sel_trees);
-    while (my $row = $sel_trees->fetchrow_arrayref) {
-	push(@trees,$row->[0]);
-    }
-}
 
 
-# Add warning here to tell the user how many trees will be 
-# created if a single tree was not specified
 
 
-## SHOW THE TREES THAT WILL BE PROCESSED
-my $num_trees = @trees;
-print "TREES TO EXPORT ($num_trees)\n";
-foreach my $IndTree (@trees) {
-    print "\t$IndTree\n";
-}
 
-#-----------------------------------------------------------+
-# FOR EACH INDIVIDUAL TREE IN THE TREES LIST                | 
-#-----------------------------------------------------------+
-foreach my $ind_tree (@trees) {
-
-    #-----------------------------+
-    # CREATE A NEW TREE OBJECT    |
-    #-----------------------------+
-    print "\tCreating a new tree object.\n";
-    $tree = new Bio::Tree::Tree() ||
-	die "Can not create the tree object.\n";
-
-    #-----------------------------+
-    # GET THE TREE ROOT           |
-    #-----------------------------+
-    execute_sth($sel_root, $ind_tree);
-    my $root = $sel_root->fetchrow_arrayref;
-
-    if ($root) {
-	print "\nProcessing tree: $ind_tree \n";
-	#print "\tRoot Node: ".$root->[0]."\n";
-	
-	# ADD THE ROOT NODE TO THE TREE OBJECT
-	my $node = new Bio::Tree::Node( '-id' => $root->[0]);
-	$tree->set_root_node($node);
-	
-	# test of find node here, this appears to work 06/22/2007
-	my @par_node = $tree->find_node( -id => $root->[0] );
-	my $num_par_nodes = @par_node;
-	
-    } else {
-
-	print STDERR "no tree with name '$ind_tree'\n";
-	next;
-
-    }
-
-    #-----------------------------+
-    # LOAD TREE NODES             |
-    #-----------------------------+
-    # This will need to load the tree nodes to the tre1e object
-    #&load_tree_nodes($sel_chld,$root,$sel_attrs, $tree);
-    &load_tree_nodes($sel_chld,$root,$sel_attrs);
-
-    #-----------------------------+
-    # LOAD NODE VARIABLES         | 
-    #-----------------------------+
-    # At this point, all of the nodes should be loaded to the tree object
-    my @all_nodes = $tree->get_nodes;
-    
-    foreach my $ind_node (@all_nodes) {
-	
-        &execute_sth($sel_attrs,$ind_node);
-	
-        my %attrs = ();
-
-        while (my $row = $sel_attrs->fetchrow_arrayref) {
-            $attrs{$row->[0]} = $row->[1];
-        }
-
-	#-----------------------------+
-	# BOOTSTRAP                   |
-	#-----------------------------+
-	# Example of adding the boostrap info
-	#$ind_node->bootstrap('99');
-	# Example of fetching support value from the attrs
-        #$attrs{'support value'} if $attrs{'support value'};
-	if ( $attrs{'support value'} ) {
-	    #print "\t\tSUP:".$attrs{'support value'}."\n";
-	    $ind_node->bootstrap( $attrs{'support value'} );
-	}
-	
-	#-----------------------------+
-	# BRANCH LENGTH               |
-	#-----------------------------+
-	# Example of adding the branch length info 
-	#$ind_node->branch_length('10');
-	# Example of fetching the branch length from the attrs
-        #print ":".$attrs{'branch length'} if $attrs{'branch length'}
-	if ($attrs{'branch length'} ) {
-	    $ind_node->branch_length( $attrs{'branch length'} );
-	}
-
-	#-----------------------------+
-	# SET NODE ID                 |
-	#-----------------------------+
-	# If null in the original tree, put null here
-	#my $sql = "SELECT label FROM node WHERE node_id = $ind_node";
-	my $node_label = fetch_node_label($dbh, $ind_node->id());
-	
-	if ($node_label) {
-	    $ind_node->id($node_label);
-	} else {
-	    $ind_node->id('');
-	}
-	
-    }
-    
-    #-----------------------------+
-    # EXPORT TREE FORMAT          |
-    #-----------------------------+
-    # The following two lines used for code testing
-    #my $treeio = new Bio::TreeIO( '-format' => $format );
-    #print "OUTPUT TREE AS $format:\n";
-    my $treeio = new Bio::TreeIO( '-format' => $format,
-				  '-file' => '>$outfile')
-	|| die "Could not open output file:\n$outfile\n";
-
-    $treeio->write_tree($tree);
-    print "\tTree exported to:\n\t$outfile\n";
-    
-
-} # End of for each tree
 
 
 # End of program
