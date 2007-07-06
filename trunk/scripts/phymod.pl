@@ -8,18 +8,18 @@
 #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 #-----------------------------------------------------------+
 #                                                           |
-# phyexport.pl - Export phylodb data to common file formats |
+# phymod.pl - modify phylogenies in phyodb                  |
 #                                                           |
 #-----------------------------------------------------------+
 #                                                           |
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
-# STARTED: 06/18/2007                                       |
+# STARTED: 07/06/2007                                       |
 # UPDATED: 07/06/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
-#  Export data from the PhyloDb database to common file     |
-#  file formats.                                            |
+#  Modify trees in the PhyloDb database.                    |
+#  Includes: branch removal                                 |
 #                                                           |
 # LICENSE:                                                  |
 #  GNU Lesser Public License                                |
@@ -29,16 +29,10 @@
 #
 # TO DO:
 # - Update POD documentation
-# - Allow for using a root_name to name all of the output trees
-#   or use the tree_name from the database as the output name
-#   when exporting trees.
-#
-# NOTE:
-# - This will initially only support export of a single tree.
  
 =head1 NAME 
 
-phyexport.pl - Export phylodb data to common file formats
+phymod.pl - Modifiy trees in the PhyloDB database
 
 =head1 SYNOPSIS
 
@@ -194,6 +188,7 @@ my $ok = GetOptions("d|dsn=s"     => \$dsn,
 		    "t|tree=s"    => \$tree_name,
 		    "parent-node" => \$node_parent,
 		    "q|quiet"     => \$quiet,
+
 		    "h|help"      => \$help);
 
 # TO DO: Normalize format to 
@@ -673,39 +668,15 @@ sub parse_dsn {
 
 =head1 HISTORY
 
-Started: 06/18/2007
+Started: 07/06/2007
 
-Updated: 06/22/2007
+Updated: 07/06/2007
 
 =cut
 
 #-----------------------------------------------------------+
 # HISTORY                                                   |
 #-----------------------------------------------------------+
-# 06/18/2007 - JCE
-# - Started program, copied subfunctions from phyimport.pl
-# - Added print_trees subfunction from print-trees.pl
-# - Added print_tree_nodes subfunction from print-trees.pl
-# 
-# 06/19/2007 - JCE
-# - added the create a new tree object and tested adding
-#   nodes to the tree
-# - Moving the subfunction for each tree to the main body
-#   of the code
-#
-# 06/21/2007 - JCE
-# - Working more with the Bio::Tree object
-#
-# 06/22/2007 - JCE
-# - Finally have a working base code to expand from
-# - Can export file to Bio::Tree supported formats
-# - Added bootstrap values to node objects
-# - Added edge lengths to node objects
-# - Added the original node id to the node object and 
-#   overwrite the id assigned by the database
-#   It may make sense to leave this if the user wants
-#   to pick branches to expand.
-#
 # 07/06/2007 - JCE
-# - Working on only exporing a subtree based on a single node
-# - This uses the parent_node variable
+# - Started program. Based on the phyexport template
+
