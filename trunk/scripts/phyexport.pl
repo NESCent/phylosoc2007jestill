@@ -218,6 +218,7 @@ unless ($dsn) {
     ($predb, $prehost) = split(/;/, $suffix);
     ($cruft, $db) = split(/=/,$predb);
     ($cruft, $host) = split(/=/,$prehost);
+
     # Print for debug
     print "\tDSN:\t$dsn\n";
     print "\tPRE:\t$prefix\n";
@@ -225,7 +226,8 @@ unless ($dsn) {
     print "\tSUF:\t$suffix\n";
     print "\tDB:\t$db\n";
     print "\tHOST:\t$host\n";
-    print "\tTREES\t$tree_name\n";
+    # The following not required
+    print "\tTREES\t$tree_name\n" if $tree_name;
 }
 
 
@@ -329,7 +331,6 @@ foreach my $IndTree (@trees) {
 # FOR EACH INDIVIDUAL TREE IN THE TREES LIST                | 
 #-----------------------------------------------------------+
 foreach my $ind_tree (@trees) {
- 
 
     #-----------------------------+
     # CREATE A NEW TREE OBJECT    |
@@ -343,6 +344,7 @@ foreach my $ind_tree (@trees) {
     #-----------------------------+
     execute_sth($sel_root, $ind_tree);
     my $root = $sel_root->fetchrow_arrayref;
+
     if ($root) {
 	print "\nProcessing tree: $ind_tree \n";
 	#print "\tRoot Node: ".$root->[0]."\n";
