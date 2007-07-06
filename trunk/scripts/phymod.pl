@@ -173,6 +173,7 @@ our $tree;                      # Tree object, this has to be a package
                                 # in a subfunction below.
                                 # This is my first attempt to work with
                                 # a package level var.
+my $cut_node;                   #
 
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
@@ -188,7 +189,9 @@ my $ok = GetOptions("d|dsn=s"     => \$dsn,
 		    "t|tree=s"    => \$tree_name,
 		    "parent-node" => \$node_parent,
 		    "q|quiet"     => \$quiet,
-
+		    "x|cut-node"  => \$cut_node,
+                    "c|copy-node" => \$copy_node,
+                    "v|paste-node"=> \$paste_node,
 		    "h|help"      => \$help);
 
 # TO DO: Normalize format to 
