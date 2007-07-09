@@ -372,6 +372,8 @@ sub count_deleted_data {
     my ($dbh, $del_node_id) = @_;
     my ($result, $cur,@row);
 
+    my $count_total_del = 0;         # Total number of records deleted
+
     #-----------------------------+
     # TABLE: count_node_path      |
     #-----------------------------+
@@ -391,7 +393,8 @@ sub count_deleted_data {
     @row=$cur->fetchrow;
     my $res_count_node_path=$row[0];
     $cur->finish();
-    
+    $count_total_del = $count_total_del + $res_count_node_path;
+
     #-----------------------------+
     # TABLE: node_attribute_value |
     #-----------------------------+
@@ -412,15 +415,97 @@ sub count_deleted_data {
     @row=$cur->fetchrow;
     my $res_count_node_attribute=$row[0];
     $cur->finish();
+    $count_total_del = $count_total_del + $res_count_node_attribute;
 
-    #print "$sql_count_node_path\n";
-    #print "RESULT: $res_count_node_path";
+
+    #-----------------------------+
+    # TABLE: node                 |
+    #-----------------------------+
+    my $sql_count_node = "SELECT COUNT(*) FROM node". 
+	" WHERE node_id IN".
+	" (".
+	"  SELECT pt.node_id".
+	"  FROM node_path p, edge e, node pt, node ch". 
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	"  AND ch.node_id = e.child_node_id".
+	"  AND p.parent_node_id = '$del_node_id'".
+	" )";
+    $cur = $dbh->prepare($sql_count_node);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_node=$row[0];
+    $cur->finish();
+    $count_total_del = $count_total_del + $res_count_node;
+
+
+    #-----------------------------+
+    # TABLE: edge                 |
+    #-----------------------------+
+    my $sql_count_edge = "SELECT COUNT(*) from edge". 
+	" WHERE edge_id IN".
+	" (".
+	"  SELECT e.edge_id".
+	"  FROM node_path p, edge e, node pt, node ch". 
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	" AND ch.node_id = e.child_node_id".
+	" AND p.parent_node_id = '$del_node_id'".
+	" )";
+    $cur = $dbh->prepare($sql_count_edge);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_edge=$row[0];
+    $cur->finish();
+    $count_total_del = $count_total_del + $res_count_edge;
     
-    print "\nThe following data will be deleted:\n";
-    print "\tnode_path ( $res_count_node_path records )\n";
-    print "\tnode_attribute_value ( $res_count_node_attribute records )\n";
+    #-----------------------------+
+    # TABLE: edge_attribute_value |
+    #-----------------------------+
+    my $sql_count_edge_attribute = "SELECT COUNT(*) FROM edge_attribute_value".
+	" WHERE edge_id IN".
+	" (".
+	"  SELECT e.edge_id".
+	"  FROM node_path p, edge e, node pt, node ch".
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	"  AND ch.node_id = e.child_node_id".
+	"  AND p.parent_node_id = '$del_node_id'".
+	" )";
+    $cur = $dbh->prepare( $sql_count_edge_attribute );
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_edge_attribute=$row[0];
+    $cur->finish();
+    $count_total_del = $count_total_del + $res_count_edge_attribute;
 
-}
+    #-----------------------------+
+    # SHOW COUNTS IF ANY EXIST    |
+    #-----------------------------+
+    # Warn the user if any records would be deleted
+    if ($count_total_del > 0) {
+	print "\nThe following data will be deleted:\n";
+	print "\tnode_path ( $res_count_node_path records )\n"
+	    unless $res_count_node_path == 0;
+	print "\tnode_attribute_value ( $res_count_node_attribute records )\n"
+	    unless $res_count_node_attribute == 0;
+	print "\tnode ( $res_count_node records)\n"
+	    unless $res_count_node == 0;
+	print "\tedge ( $res_count_edge records)\n"
+	    unless $res_count_edge == 0;
+	print "\tedge_attribute_value ( $res_count_edge_attribute records )\n"
+	    unless $res_count_edge_attribute == 0;
+	} 
+    else {
+	# If no data would actually be cut with this query
+	# then exit the program
+	print "No data would be deleted with this query\n";
+	exit;
+    }
+
+
+} # End of count_deleted_data subfunction
+
 
 sub load_tree_nodes {
 
@@ -642,4 +727,7 @@ Updated: 07/06/2007
 #-----------------------------------------------------------+
 # 07/06/2007 - JCE
 # - Started program. Based on the phyexport template
-
+#
+# 07/09/2007 - JCE
+# - Finished count_deleted_data subfunction
+#
