@@ -15,7 +15,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/18/2007                                       |
-# UPDATED: 07/06/2007                                       |
+# UPDATED: 07/10/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Export data from the PhyloDb database to common file     |
@@ -192,7 +192,7 @@ my $ok = GetOptions("d|dsn=s"     => \$dsn,
 		    "dbname=s"    => \$db,
 		    "host=s"      => \$host,
 		    "t|tree=s"    => \$tree_name,
-		    "parent-node" => \$node_parent,
+#		    "parent-node" => \$node_parent,
 		    "q|quiet"     => \$quiet,
 		    "h|help"      => \$help);
 
@@ -424,8 +424,20 @@ foreach my $ind_tree (@trees) {
 	#-----------------------------+
 	# SET NODE ID                 |
 	#-----------------------------+
+	# TO DO 
+	# INCLUDE OPTION TO USE DB ID'S FOR INTERNAL NODES
 	# If null in the original tree, put null here
 	#my $sql = "SELECT label FROM node WHERE node_id = $ind_node";
+	
+	# TO USE DB ID's FOR INTERNAL NODES
+	# WHEN AN EXISTING NODE NAME DOES NOT EXIST
+	#my $node_label = fetch_node_label($dbh, $ind_node->id());
+	#
+	#if ($node_label) {
+	#    $ind_node->id($node_label);
+	#}
+
+
 	my $node_label = fetch_node_label($dbh, $ind_node->id());
 	
 	if ($node_label) {
@@ -442,12 +454,29 @@ foreach my $ind_tree (@trees) {
     # The following two lines used for code testing
     #my $treeio = new Bio::TreeIO( '-format' => $format );
     #print "OUTPUT TREE AS $format:\n";
-    my $treeio = new Bio::TreeIO( '-format' => $format,
-				  '-file' => '>$outfile')
+    my $treeio = Bio::TreeIO->new( -format => $format,
+				   -file => '>'.$outfile)
 	|| die "Could not open output file:\n$outfile\n";
+    
+    
+    # The following code writes the tree out to the STDOUT
+    my $treeout_here = Bio::TreeIO->new( -format => $format );
+    
+    $treeout_here->write_tree($tree); 
+
 
     $treeio->write_tree($tree);
-    print "\tTree exported to:\n\t$outfile\n";
+
+#    # The follwoing writes the code to the output file
+#    # but for some reason it does not return true ..
+#    if ( $treeio->write_tree($tree) ) {
+#	print "\tTree exported to:\n\t$outfile\n";
+#    };
+    
+#    $treeio->write_tree($PhyloDB::tree) ||
+#	die "Cound not write tree to output file.";
+
+#    print "\tTree exported to:\n\t$outfile\n";
     
 
 } # End of for each tree
@@ -675,7 +704,7 @@ sub parse_dsn {
 
 Started: 06/18/2007
 
-Updated: 06/22/2007
+Updated: 07/10/2007
 
 =cut
 
@@ -709,3 +738,7 @@ Updated: 06/22/2007
 # 07/06/2007 - JCE
 # - Working on only exporing a subtree based on a single node
 # - This uses the parent_node variable
+#
+# 07/10/2007 - JCE
+# - Working on problem exporting tree to file
+
