@@ -391,23 +391,25 @@ sub count_deleted_data_2 {
     $cur = $dbh->prepare($sql_tree_name);
     $cur->execute();
     @row=$cur->fetchrow;
-    my $res_tree_name=$row[0];
-#    my $res_tree_name=$row[0] ||
-#	die "No tree name found for node: $del_node_id\n".
-#	"This node may not exist in the database.\n";
+    #my $res_tree_name=$row[0];
+    my $res_tree_name=$row[0] ||
+	die "No tree name found for node: $del_node_id\n".
+	"This node may not exist in the database.\n";
     $cur->finish();
 
     #-----------------------------+
     # DETERMINE TREE ID           |
     #-----------------------------+
-    my $sql_tree_name = "SELECT tree.tree_id FROM tree".
+    my $sql_tree_id = "SELECT tree.tree_id FROM tree".
 	" RIGHT JOIN node".
 	" ON node.tree_id = tree.tree_id".
 	" WHERE node.node_id = '$del_node_id'";
-    $cur = $dbh->prepare($sql_tree_name);
+    $cur = $dbh->prepare($sql_tree_id);
     $cur->execute();
     @row=$cur->fetchrow;
-    my $res_tree_id=$row[0];
+    my $res_tree_id=$row[0] ||
+	die "No tree id found for node: $del_node_id\n".
+	"This node may not exist in the database.\n";
     $cur->finish();
 
     #-----------------------------+
@@ -703,11 +705,11 @@ sub delete_data_2 {
     #-----------------------------+
     # DETERMINE TREE ID           |
     #-----------------------------+
-    my $sql_tree_name = "SELECT tree.tree_id FROM tree".
+    my $sql_tree_id = "SELECT tree.tree_id FROM tree".
 	" RIGHT JOIN node".
 	" ON node.tree_id = tree.tree_id".
 	" WHERE node.node_id = '$del_node_id'";
-    $cur = $dbh->prepare($sql_tree_name);
+    $cur = $dbh->prepare($sql_tree_id);
     $cur->execute();
     @row=$cur->fetchrow;
     my $res_tree_id=$row[0];
