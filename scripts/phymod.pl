@@ -16,7 +16,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 07/06/2007                                       |
-# UPDATED: 07/06/2007                                       |
+# UPDATED: 07/09/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Modify trees in the PhyloDb database.                    |
@@ -330,8 +330,8 @@ my $dbh = &connect_to_db($dsn, $usrname, $pass);
 #-----------------------------+
 
 
+if ($oper =~ "delete") {
 
-if ($oper = "delete") {
 #-----------------------------+
 # DELETE                      |
 #-----------------------------+
@@ -339,22 +339,28 @@ if ($oper = "delete") {
     # Warn the user about what would be deleted from
     # the database
     # Currently serving as a test that this is working
-    count_deleted_data($dbh, $cut_node) unless $quiet;
+    my $num_del = count_deleted_data_2($dbh, $cut_node);
     
-}
+    # Check with user before deleting
+    if ($num_del > 0) {
+	my $del_check = user_feedback("Do you want to delete these records");
+	
+	if ($del_check =~ "Y") {
+	    # DELETE THE RECORDS
+	    print "These records will be deleted.\n";
+
+	    delete_data_2($dbh, $cut_node);
+	} else {
+	    print "No records will be deleted.\n";
+	    exit;
+	} # End of check for delete
+	
+    } # End of if number to delete is gt zero
+
+} # End of opeation is delete
 
 
 # There will be a number of possible operations being requested
-
-
-
-
-
-
-
-
-
-
 
 # End of program
 print "\n$0 has finished.\n";
@@ -367,12 +373,177 @@ exit;
 
 #sub fetch_
 
+sub count_deleted_data_2 {
+# Give the user info on the data that would be deleted
+# This allows to show warning before proceeding
+
+    my ($dbh, $del_node_id) = @_;
+    my ($result, $cur, @row);
+    my $count_total_del = 0;         # Total number of records deleted
+
+    #-----------------------------+
+    # DETERMINE TREE NAME         |
+    #-----------------------------+
+    my $sql_tree_name = "SELECT tree.name FROM tree".
+	" RIGHT JOIN node".
+	" ON node.tree_id = tree.tree_id".
+	" WHERE node.node_id = '$del_node_id'";
+    $cur = $dbh->prepare($sql_tree_name);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_tree_name=$row[0];
+#    my $res_tree_name=$row[0] ||
+#	die "No tree name found for node: $del_node_id\n".
+#	"This node may not exist in the database.\n";
+    $cur->finish();
+
+    #-----------------------------+
+    # DETERMINE TREE ID           |
+    #-----------------------------+
+    my $sql_tree_name = "SELECT tree.tree_id FROM tree".
+	" RIGHT JOIN node".
+	" ON node.tree_id = tree.tree_id".
+	" WHERE node.node_id = '$del_node_id'";
+    $cur = $dbh->prepare($sql_tree_name);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_tree_id=$row[0];
+    $cur->finish();
+
+    #-----------------------------+
+    # SQL FOR NODE ID             |
+    #-----------------------------+
+    my $sql_in_nodes = "SELECT n1.node_id".
+	" FROM node AS n1, node AS n2".
+	" WHERE n1.left_idx BETWEEN n2.left_idx AND n2.right_idx". 
+	" AND n2.node_id='$del_node_id'".
+	" AND n2.tree_id='$res_tree_id'";
+
+    #-----------------------------+
+    # TABLE: count_node_path      |
+    #-----------------------------+
+    my $sql_count_node_path = 
+	"SELECT COUNT(*) FROM node_path".
+	" WHERE parent_node_id IN".
+	" (".$sql_in_nodes.")";
+    $cur = $dbh->prepare($sql_count_node_path);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_node_path=$row[0];
+    $cur->finish();
+    $count_total_del = $count_total_del + $res_count_node_path;
+
+    #-----------------------------+
+    # TABLE: node_attribute_value |
+    #-----------------------------+
+    my $sql_count_node_attribute =
+	"SELECT COUNT(*) FROM node_attribute_value". 
+	" WHERE node_id IN".
+	" (".$sql_in_nodes." )";
+    $cur = $dbh->prepare($sql_count_node_attribute);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_node_attribute=$row[0];
+    $cur->finish();
+    $count_total_del = $count_total_del + $res_count_node_attribute;
+
+
+    #-----------------------------+
+    # TABLE: node                 |
+    #-----------------------------+
+    my $sql_count_node =  "SELECT COUNT(*)".
+	" FROM node AS n1, node AS n2".
+	" WHERE n1.left_idx BETWEEN n2.left_idx AND n2.right_idx". 
+	" AND n2.node_id='$del_node_id'".
+	" AND n2.tree_id='$res_tree_id'";
+    $cur = $dbh->prepare($sql_count_node);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_node=$row[0];
+    $cur->finish();
+    $count_total_del = $count_total_del + $res_count_node;
+
+    #-----------------------------+
+    # TABLE: edge                 |
+    #-----------------------------+
+    my $sql_count_edge = "SELECT COUNT(*) from edge". 
+	" WHERE child_node_id IN".
+	" (".$sql_in_nodes." )";
+    $cur = $dbh->prepare($sql_count_edge);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_edge=$row[0];
+    $cur->finish();
+    $count_total_del = $count_total_del + $res_count_edge;
+    
+    #-----------------------------+
+    # TABLE: edge_attribute_value |
+    #-----------------------------+
+    # This will remove edge_attribute_values 
+    # where the nodes are 
+    my $sql_count_edge_attribute = "SELECT COUNT(*) FROM edge_attribute_value".
+	" WHERE edge_id IN".
+	" (SELECT edge_id FROM edge".
+	"   WHERE child_node_id IN".
+	"   (".$sql_in_nodes." )".
+	" )";
+    $cur = $dbh->prepare( $sql_count_edge_attribute );
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_count_edge_attribute=$row[0];
+    $cur->finish();
+    $count_total_del = $count_total_del + $res_count_edge_attribute;
+
+    #-----------------------------+
+    # SHOW COUNTS IF ANY EXIST    |
+    #-----------------------------+
+    # Warn the user if any records would be deleted
+    if ($count_total_del > 0) {
+	print "\nThe following data will be deleted:\n";
+	print "\tTREE: $res_tree_name\n" 
+	    unless !$res_tree_name;
+	print "\tnode_path ( $res_count_node_path records )\n"
+	    unless $res_count_node_path == 0;
+	print "\tnode_attribute_value ( $res_count_node_attribute records )\n"
+	    unless $res_count_node_attribute == 0;
+	print "\tnode ( $res_count_node records)\n"
+	    unless $res_count_node == 0;
+	print "\tedge ( $res_count_edge records)\n"
+	    unless $res_count_edge == 0;
+	print "\tedge_attribute_value ( $res_count_edge_attribute records )\n"
+	    unless $res_count_edge_attribute == 0;
+	} 
+    else {
+	# If no data would actually be cut with this query
+	# then exit the program
+	print "No data would be deleted with this query\n";
+	exit;
+    }
+    
+    return "$count_total_del";
+    
+} # End of count_deleted_data subfunction
+
 sub count_deleted_data {
 # Give the user info on the data that would be deleted
-    my ($dbh, $del_node_id) = @_;
-    my ($result, $cur,@row);
+# This allows to show warning before proceeding
 
+    my ($dbh, $del_node_id) = @_;
+    my ($result, $cur, @row);
     my $count_total_del = 0;         # Total number of records deleted
+
+    #-----------------------------+
+    # DETERMINE TREE NAME         |
+    #-----------------------------+
+    my $sql_tree_name = "SELECT tree.name FROM tree".
+	" RIGHT JOIN node".
+	" ON node.tree_id = tree.tree_id".
+	" WHERE node.node_id = '$del_node_id'";
+    $cur = $dbh->prepare($sql_tree_name);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_tree_name=$row[0];
+    $cur->finish();
 
     #-----------------------------+
     # TABLE: count_node_path      |
@@ -409,7 +580,6 @@ sub count_deleted_data {
 	"  AND ch.node_id = e.child_node_id".
 	"  AND p.parent_node_id = '$del_node_id'".
 	" )";
-
     $cur = $dbh->prepare($sql_count_node_attribute);
     $cur->execute();
     @row=$cur->fetchrow;
@@ -485,6 +655,8 @@ sub count_deleted_data {
     # Warn the user if any records would be deleted
     if ($count_total_del > 0) {
 	print "\nThe following data will be deleted:\n";
+	print "\tTREE: $res_tree_name\n" 
+	    unless !$res_tree_name;
 	print "\tnode_path ( $res_count_node_path records )\n"
 	    unless $res_count_node_path == 0;
 	print "\tnode_attribute_value ( $res_count_node_attribute records )\n"
@@ -502,7 +674,243 @@ sub count_deleted_data {
 	print "No data would be deleted with this query\n";
 	exit;
     }
+    
+    return "$count_total_del";
+    
+} # End of count_deleted_data subfunction
 
+sub delete_data_2 {
+# Give the user info on the data that would be deleted
+# This allows to show warning before proceeding
+
+    my ($dbh, $del_node_id) = @_;
+    my ($result, $cur, @row);
+    my $count_total_del = 0;         # Total number of records deleted
+
+    #-----------------------------+
+    # DETERMINE TREE NAME         |
+    #-----------------------------+
+    my $sql_tree_name = "SELECT tree.name FROM tree".
+	" RIGHT JOIN node".
+	" ON node.tree_id = tree.tree_id".
+	" WHERE node.node_id = '$del_node_id'";
+    $cur = $dbh->prepare($sql_tree_name);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_tree_name=$row[0];
+    $cur->finish();
+
+    #-----------------------------+
+    # DETERMINE TREE ID           |
+    #-----------------------------+
+    my $sql_tree_name = "SELECT tree.tree_id FROM tree".
+	" RIGHT JOIN node".
+	" ON node.tree_id = tree.tree_id".
+	" WHERE node.node_id = '$del_node_id'";
+    $cur = $dbh->prepare($sql_tree_name);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    my $res_tree_id=$row[0];
+    $cur->finish();
+
+    #-----------------------------+
+    # SQL FOR NODE ID             |
+    #-----------------------------+
+    my $sql_in_nodes = "SELECT n1.node_id".
+	" FROM node AS n1, node AS n2".
+	" WHERE n1.left_idx BETWEEN n2.left_idx AND n2.right_idx". 
+	" AND n2.node_id='$del_node_id'".
+	" AND n2.tree_id='$res_tree_id'";
+
+
+    #-----------------------------+
+    # GET LEFT AND RIGHT IDX      |
+    #-----------------------------+
+    my $sql_get_idx = "SELECT left_idx, right_idx".
+	" FROM node".
+	" WHERE node_id ='$del_node_id'";
+    $cur = $dbh->prepare($sql_get_idx);
+    $cur->execute;
+    @row=$cur->fetchrow;
+    my $left_idx =$row[0];
+    my $right_idx=$row[1];
+    $cur->finish();
+    #print "LEFT:\t$left_idx\n";
+    #print "RIGHT:\t$right_idx\n";
+
+    #-----------------------------+
+    # TABLE: edge_attribute_value |
+    #-----------------------------+
+    # This will remove edge_attribute_values 
+    # where the nodes are 
+    my $sql_count_edge_attribute = "DELETE FROM edge_attribute_value".
+	" WHERE edge_id IN".
+	" (SELECT edge_id FROM edge".
+	"   WHERE child_node_id IN".
+	"   (".$sql_in_nodes." )".
+	" )";
+    $cur = $dbh->prepare( $sql_count_edge_attribute );
+    $cur->execute();
+    $cur->finish();
+
+    #-----------------------------+
+    # TABLE: edge                 |
+    #-----------------------------+
+    my $sql_count_edge = "DELETE from edge". 
+	" WHERE child_node_id IN".
+	" (".$sql_in_nodes." )";
+    $cur = $dbh->prepare($sql_count_edge);
+    $cur->execute();
+    $cur->finish();
+
+    #-----------------------------+
+    # TABLE: node_path            |
+    #-----------------------------+
+    my $sql_del_node_path = 
+	"DELETE FROM node_path".
+	" WHERE parent_node_id IN".
+	" (".$sql_in_nodes.")";
+    $cur = $dbh->prepare($sql_del_node_path);
+    $cur->execute();
+    $cur->finish();
+
+    #-----------------------------+
+    # TABLE: node_attribute_value |
+    #-----------------------------+
+    my $sql_del_node_attribute =
+	"DELETE FROM node_attribute_value". 
+	" WHERE node_id IN".
+	" (".$sql_in_nodes." )";
+    $cur = $dbh->prepare($sql_del_node_attribute);
+    $cur->execute();
+    $cur->finish();
+
+    #-----------------------------+
+    # TABLE: node                 |
+    #-----------------------------+
+    # The query below makes use of the $left_idx and 
+    # $right_idx values from above
+    my $sql_del_node = "DELETE FROM node WHERE".
+	" left_idx BETWEEN".
+	" $left_idx AND $right_idx";
+    $cur = $dbh->prepare($sql_del_node);
+    $cur->execute();
+    $cur->finish();
+
+    $dbh->commit();
+    
+} # End of count_deleted_data subfunction
+
+
+
+
+sub delete_data {
+# Give the user info on the data that would be deleted
+# This allows to show warning before proceeding
+
+    my ($dbh, $del_node_id) = @_;
+    my ($result, $cur, @row);
+
+    print "CUTTING $del_node_id\n";
+
+
+    # GET THE INFO ON THE RECORDS TO DELETE
+
+
+
+# THE FOLLOWING DELETE QUERY DOES NOT WORK
+#    #-----------------------------+
+#    # TABLE: node_path            |
+#    #-----------------------------+
+#    my $sql_del_node_path = 
+#	"DELETE FROM node_path".
+#	" WHERE parent_node_id IN".
+#	" (".
+#	"  SELECT pt.node_id ".
+#	"  FROM node_path p, edge e, node pt, node ch ".
+#	"  WHERE e.child_node_id = p.child_node_id".
+#	"  AND pt.node_id = e.parent_node_id".
+#	"  AND ch.node_id = e.child_node_id".
+#	"  AND p.parent_node_id = '$del_node_id'".
+#	")";
+#    $cur = $dbh->prepare($sql_del_node_path);
+#    $cur->execute();
+#    $cur->finish();
+    
+    #-----------------------------+
+    # TABLE: node_attribute_value |
+    #-----------------------------+
+    my $sql_del_node_attribute =
+	"DELETE FROM node_attribute_value". 
+	" WHERE node_id IN".
+	" (".
+	"  SELECT pt.node_id". 
+	"  FROM node_path p, edge e, node pt, node ch". 
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	"  AND ch.node_id = e.child_node_id".
+	"  AND p.parent_node_id = '$del_node_id'".
+	" )";
+    $cur = $dbh->prepare($sql_del_node_attribute);
+    $cur->execute();
+    $cur->finish();
+
+    #-----------------------------+
+    # TABLE: edge_attribute_value |
+    #-----------------------------+
+    my $sql_del_edge_attribute = "DELETE FROM edge_attribute_value".
+	" WHERE edge_id IN".
+	" (".
+	"  SELECT e.edge_id".
+	"  FROM node_path p, edge e, node pt, node ch".
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	"  AND ch.node_id = e.child_node_id".
+	"  AND p.parent_node_id = '$del_node_id'".
+	" )";
+    $cur = $dbh->prepare( $sql_del_edge_attribute );
+    $cur->execute();
+    $cur->finish();
+
+
+# The following have the problem where the UPDATE refers
+# tables that are referenced by the SELECT query within the WHERE
+    #-----------------------------+
+    # TABLE: node                 |
+    #-----------------------------+
+    my $sql_del_node = "DELETE FROM node". 
+	" WHERE node_id IN".
+	" (".
+	"  SELECT pt.node_id".
+	"  FROM node_path p, edge e, node pt, node ch". 
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	"  AND ch.node_id = e.child_node_id".
+	"  AND p.parent_node_id = '$del_node_id'".
+	" )";
+    $cur = $dbh->prepare($sql_del_node);
+    $cur->execute();
+    $cur->finish();
+
+    #-----------------------------+
+    # TABLE: edge                 |
+    #-----------------------------+
+    my $sql_del_edge = "DELETE from edge". 
+	" WHERE edge_id IN".
+	" (".
+	"  SELECT e.edge_id".
+	"  FROM node_path p, edge e, node pt, node ch". 
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	"  AND ch.node_id = e.child_node_id".
+	"  AND p.parent_node_id = '$del_node_id'".
+	" )";
+    $cur = $dbh->prepare($sql_del_edge);
+    $cur->execute();
+    $cur->finish();
+    
+    # Commint
+    $dbh->commit();
 
 } # End of count_deleted_data subfunction
 
@@ -714,11 +1122,40 @@ sub parse_dsn {
 }
 
 
+sub user_feedback
+{
+#-----------------------------+
+# USER FEEDBACK SUBFUNCTION   |
+#-----------------------------+
+    
+    my $Question = $_[0];
+    my $Answer;
+    
+    print "\n$Question \n";
+    
+    while (<>)
+    {
+	chop;
+	if ( ($_ eq 'y') || ($_ eq 'Y') || ($_ eq 'yes') || ($_ eq 'YES') ) {
+	    $Answer = "Y";
+	    return $Answer;
+	}
+	elsif ( ($_ eq 'n') || ($_ eq 'N') || ($_ eq 'NO') || ($_ eq 'no') ) {
+	    $Answer = "N";
+	    return $Answer;
+	}
+	else{
+	    print "\n$Question \n";
+	}
+    }
+    
+} # End of UserFeedback subfunction
+
 =head1 HISTORY
 
 Started: 07/06/2007
 
-Updated: 07/06/2007
+Updated: 07/09/2007
 
 =cut
 
@@ -730,4 +1167,4 @@ Updated: 07/06/2007
 #
 # 07/09/2007 - JCE
 # - Finished count_deleted_data subfunction
-#
+# - Added user feedback subfunction

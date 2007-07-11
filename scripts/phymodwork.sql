@@ -231,3 +231,52 @@ WHERE edge_id IN
  AND ch.node_id = e.child_node_id
  AND p.parent_node_id = '25'
 );
+
+
+system echo '==================================';
+system echo ' TREE DATA';
+system echo '==================================';
+SELECT tree.name FROM tree
+RIGHT JOIN node
+ON node.tree_id = tree.tree_id
+WHERE node.node_id = '25';
+
+
+
+system echo '==================================';
+system echo ' DELETE ';
+system echo '==================================';
+
+DELETE FROM edge_attribute_value
+WHERE edge_id IN 
+(
+ SELECT e.edge_id 
+ FROM node_path p, edge e, node pt, node ch 
+ WHERE e.child_node_id = p.child_node_id
+ AND pt.node_id = e.parent_node_id
+ AND ch.node_id = e.child_node_id
+ AND p.parent_node_id = '25'
+);
+
+
+-- The following does not work
+--DELETE FROM node_path
+--WHERE parent_node_id IN
+--(	
+-- SELECT pt.node_id
+-- FROM node_path p, edge e, node pt, node ch
+-- WHERE e.child_node_id = p.child_node_id
+-- AND pt.node_id = e.parent_node_id
+-- AND ch.node_id = e.child_node_id
+-- AND p.parent_node_id = '25'
+--)
+
+DELTE FROM edge_attribute_value".
+	" WHERE edge_id IN".
+	" (".
+	"  SELECT e.edge_id".
+	"  FROM node_path p, edge e, node pt, node ch".
+	"  WHERE e.child_node_id = p.child_node_id".
+	"  AND pt.node_id = e.parent_node_id".
+	"  AND ch.node_id = e.child_node_id".
+	"  AND p.parent_node_id = '$del_node_id'".
