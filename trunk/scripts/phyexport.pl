@@ -15,7 +15,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/18/2007                                       |
-# UPDATED: 07/10/2007                                       |
+# UPDATED: 07/11/2007
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Export data from the PhyloDb database to common file     |
@@ -52,10 +52,11 @@ phyexport.pl - Export phylodb data to common file formats
         --dbname     # Name of database to use
         --driver     # "mysql", "Pg", "Oracle" (default "mysql")
         --host       # optional: host to connect with
-        --help       # Print this help message
-        --quiet      # Run the program in quiet mode.
         --format     # "newick", "nexus" (default "newick")
         --tree       # Name of the tree to export
+        --help       # Print this help message
+        --quiet      # Run the program in quiet mode.
+        --db-node-id # Preserve DB node names in export
 
 =head1 DESCRIPTION
 
@@ -117,6 +118,12 @@ Print the help message.
 Print the program in quiet mode. No output will be printed to STDOUT
 and the user will not be prompted for intput.
 
+=item --db-node-id
+
+Preserve database node ids when exporting the tree. For nodes that
+have existing labels in the label field, the node_id from the database
+will be indicated in parentesis.
+
 =back
 
 =head1 AUTHORS
@@ -152,9 +159,6 @@ my $format = 'newick';         # Data format used in infile
 my $db;                        # Database name (ie. biosql)
 my $host;                      # Database host (ie. localhost)
 my $driver;                    # Database driver (ie. mysql)
-my $help = 0;                  # Display help
-my $quiet = 0;                 # Run the program in quiet mode
-                               # will not prompt for command line options
 my $tree_name;                 # The name of the tree
                                # For files with multiple trees, this may
                                # be used as a base name to name the trees with
@@ -180,6 +184,12 @@ our $tree;                      # Tree object, this has to be a package
                                 # This is my first attempt to work with
                                 # a package level var.
 
+my $help = 0;                  # Display help
+my $quiet = 0;                 # Run the program in quiet mode
+                               # will not prompt for command line options
+my $show_node_id = 0;          # Include the database node_id in the output
+
+
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
@@ -193,6 +203,7 @@ my $ok = GetOptions("d|dsn=s"     => \$dsn,
 		    "host=s"      => \$host,
 		    "t|tree=s"    => \$tree_name,
 #		    "parent-node" => \$node_parent,
+		    "db-node-id"  => \$show_node_id,
 		    "q|quiet"     => \$quiet,
 		    "h|help"      => \$help);
 
@@ -201,7 +212,6 @@ my $ok = GetOptions("d|dsn=s"     => \$dsn,
 # Exit if format string is not recognized
 #print "Requested format:$format\n";
 $format = &in_format_check($format);
-
 
 # SHOW HELP
 if($help || (!$ok)) {
@@ -429,22 +439,33 @@ foreach my $ind_tree (@trees) {
 	# If null in the original tree, put null here
 	#my $sql = "SELECT label FROM node WHERE node_id = $ind_node";
 	
-	# TO USE DB ID's FOR INTERNAL NODES
-	# WHEN AN EXISTING NODE NAME DOES NOT EXIST
-	#my $node_label = fetch_node_label($dbh, $ind_node->id());
-	#
-	#if ($node_label) {
-	#    $ind_node->id($node_label);
-	#}
+	if ($show_node_id) {
 
-
-	my $node_label = fetch_node_label($dbh, $ind_node->id());
-	
-	if ($node_label) {
-	    $ind_node->id($node_label);
-	} else {
-	    $ind_node->id('');
+	    my $node_label = fetch_node_label($dbh, $ind_node->id());
+	    
+	    # If a node label exists in the database, show the 
+	    # database node id in parenthesis
+	    if ($node_label) {
+		# At this point the node id in the database is saved
+		# as $ind_node->id, the node label from the original
+		# tree is stored as $node_label
+		my $new_node_id = $node_label."_node_".$ind_node->id;
+		$ind_node->id($new_node_id);
+	    }
 	}
+	else {
+	    
+	    # Otherwise overwrite the node id with the value in
+	    # the node_label field of the node table
+	    my $node_label = fetch_node_label($dbh, $ind_node->id());
+	    
+	    if ($node_label) {
+		$ind_node->id($node_label);
+	    } else {
+		$ind_node->id('');
+	    }
+
+	} # End of  if show_node_id
 	
     }
     
@@ -704,7 +725,7 @@ sub parse_dsn {
 
 Started: 06/18/2007
 
-Updated: 07/10/2007
+Updated: 07/11/2007
 
 =cut
 
@@ -740,5 +761,10 @@ Updated: 07/10/2007
 # - This uses the parent_node variable
 #
 # 07/10/2007 - JCE
-# - Working on problem exporting tree to file
-
+# - Fixed problem exporting tree to file, filehandle was 
+#   not being passed to the BioTree object
+#
+# 07/11/2007 - JCE
+# - Added --db-node-id flag to include the database node id
+#   in the exported tree, the default is to rever to the node
+#   labels used in the original tree as stores in node.label
