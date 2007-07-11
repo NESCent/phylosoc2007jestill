@@ -43,20 +43,21 @@ phyexport.pl - Export phylodb data to common file formats
 =head1 SYNOPSIS
 
   Usage: phyexport.pl
-        --dsn        # The DSN string the database to connect to
-                     # Must conform to:
-                     # 'DBI:mysql:database=biosql;host=localhost' 
-        --outfile    # Full path to output file that will be created.
-        --dbuser     # User name to connect with
-        --dbpass     # Password to connect with
-        --dbname     # Name of database to use
-        --driver     # "mysql", "Pg", "Oracle" (default "mysql")
-        --host       # optional: host to connect with
-        --format     # "newick", "nexus" (default "newick")
-        --tree       # Name of the tree to export
-        --help       # Print this help message
-        --quiet      # Run the program in quiet mode.
-        --db-node-id # Preserve DB node names in export
+        --dsn         # The DSN string the database to connect to
+                      # Must conform to:
+                      # 'DBI:mysql:database=biosql;host=localhost' 
+        --outfile     # Full path to output file that will be created.
+        --dbuser      # User name to connect with
+        --dbpass      # Password to connect with
+        --dbname      # Name of database to use
+        --driver      # "mysql", "Pg", "Oracle" (default "mysql")
+        --host        # optional: host to connect with
+        --format      # "newick", "nexus" (default "newick")
+        --tree        # Name of the tree to export
+        --parent-node # Node to serve as root for a subtree export
+        --help        # Print this help message
+        --quiet       # Run the program in quiet mode.
+        --db-node-id  # Preserve DB node names in export
 
 =head1 DESCRIPTION
 
@@ -108,6 +109,10 @@ The database name to connect to; default is biosql.
 
 The database driver to connect with; default is mysql.
 Options other then mysql are currently not supported.
+
+=item --parent-node
+
+Node id to serve as the root for a subtree export.
     
 =item -h, --help
 
@@ -172,6 +177,8 @@ my $sth;                       # Statement handle for SQL statement object
 #my $tree = new Bio::Tree::Tree() ||
 #	die "Can not create the tree object.\n";
 
+my $root;                       # The node_id of the root of the tree
+                                # that will be exported
 my $parent_node;                # The parent node that will serve as the
                                 # clipping point for exporting a 
                                 # new tree
@@ -193,16 +200,16 @@ my $show_node_id = 0;          # Include the database node_id in the output
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
-my $ok = GetOptions("d|dsn=s"     => \$dsn,
-                    "u|dbuser=s"  => \$usrname,
-                    "o|outfile=s" => \$outfile,
-                    "f|format=s"  => \$format,
-                    "p|dbpass=s"  => \$pass,
-		    "driver=s"    => \$driver,
-		    "dbname=s"    => \$db,
-		    "host=s"      => \$host,
-		    "t|tree=s"    => \$tree_name,
-#		    "parent-node" => \$node_parent,
+my $ok = GetOptions("d|dsn=s"       => \$dsn,
+                    "u|dbuser=s"    => \$usrname,
+                    "o|outfile=s"   => \$outfile,
+                    "f|format=s"    => \$format,
+                    "p|dbpass=s"    => \$pass,
+		    "driver=s"      => \$driver,
+		    "dbname=s"      => \$db,
+		    "host=s"        => \$host,
+		    "t|tree=s"      => \$tree_name,
+		    "parent-node=s" => \$parent_node,
 		    "db-node-id"  => \$show_node_id,
 		    "q|quiet"     => \$quiet,
 		    "h|help"      => \$help);
@@ -360,11 +367,22 @@ foreach my $ind_tree (@trees) {
     $tree = new Bio::Tree::Tree() ||
 	die "Can not create the tree object.\n";
 
-    #-----------------------------+
-    # GET THE TREE ROOT           |
-    #-----------------------------+
-    execute_sth($sel_root, $ind_tree);
-    my $root = $sel_root->fetchrow_arrayref;
+
+    #///////////////////////////////////////////////////
+    # WORKING HERE
+    # TRYING TO DEFINE ROOT AS THE 
+    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    
+    if ($parent_node) {
+	# Set the root to the parent node passed at cmd line
+	$root->[0] = $parent_node;
+    }
+    else {
+	# Get the root to the entire tre
+	execute_sth($sel_root, $ind_tree);
+	$root = $sel_root->fetchrow_arrayref;
+    }
+
 
     if ($root) {
 	print "\nProcessing tree: $ind_tree \n";
@@ -378,11 +396,10 @@ foreach my $ind_tree (@trees) {
 	my @par_node = $tree->find_node( -id => $root->[0] );
 	my $num_par_nodes = @par_node;
 	
-    } else {
-
+    } 
+    else {
 	print STDERR "no tree with name '$ind_tree'\n";
 	next;
-
     }
 
     #-----------------------------+
@@ -768,3 +785,5 @@ Updated: 07/11/2007
 # - Added --db-node-id flag to include the database node id
 #   in the exported tree, the default is to rever to the node
 #   labels used in the original tree as stores in node.label
+# - Added --parent-node to serve as the base node to export
+#   a subtre
