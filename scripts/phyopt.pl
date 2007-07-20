@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 07/04/2007                                       |
-# UPDATED: 07/05/2007                                       |
+# UPDATED: 07/20/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Optimize a PhyloDB. Add left and right index values.     |
@@ -120,8 +120,6 @@ William Piel <william.piel at yale.edu>
 
 =cut
 
-print "Staring $0 ..\n";
-
 #-----------------------------+
 # INCLUDES                    |
 #-----------------------------+
@@ -133,6 +131,8 @@ use constant LOG_CHUNK => 10000;
 #-----------------------------+
 # VARIABLE SCOPE              |
 #-----------------------------+
+my $ver = "Dev 07/20/2007";    #
+
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
 my $dsn = $ENV{DBI_DSN};       # DSN for database connection
@@ -141,7 +141,6 @@ my $format = 'newick';         # Data format used in infile
 my $db;                        # Database name (ie. biosql)
 my $host;                      # Database host (ie. localhost)
 my $driver;                    # Database driver (ie. mysql)
-my $help = 0;                  # Display help
 my $sqldir;                    # Directory that contains the sql to run
                                # to create the tables.
 my $quiet = 0;                 # Run the program in quiet mode
@@ -155,14 +154,18 @@ my @trees = ();                # Array holding the names of the trees that will
                                # be exported
 my $verbose;                   # Boolean, but chatty or not
 my $tree;                      # This is what H. Lapp used
+my $show_help = 0;             # Display help
+my $show_man = 0;              # Show the man page via perldoc
+my $show_usage = 0;            # Show the basic usage for the program
+my $show_version = 0;          # Show the program version
 
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
 my $ok = GetOptions("d|dsn=s"    => \$dsn,
                     "u|dbuser=s" => \$usrname,
-                    "i|infile=s" => \$infile,
-                    "f|format=s" => \$format,
+#                    "i|infile=s" => \$infile,
+#                    "f|format=s" => \$format,
                     "p|dbpass=s" => \$pass,
                     "v|verbose"  => \$verbose,
 		    "s|sqldir=s" => \$sqldir,
@@ -171,16 +174,36 @@ my $ok = GetOptions("d|dsn=s"    => \$dsn,
 		    "host=s"     => \$host,
 		    "t|tree=s"   => \$tree_name,
 		    "q|quiet"    => \$quiet,
-		    "h|help"     => \$help);
+		    "version"    => \$show_version,
+		    "man"        => \$show_man,
+		    "usage"      => \$show_usage,
+		    "h|help"     => \$show_help,
+		    );
 
-# TO DO: Normalize format to 
+#-----------------------------+
+# SHOW REQUESTED HELP         |
+#-----------------------------+
 
+if ($show_usage) {
+    print_help("");
+}
 
-# SHOW HELP
-if($help || (!$ok)) {
+if ($show_help || (!$ok) ) {
+    print_help("full");
+}
+
+if ($show_version) {
+    print "\n$0:\nVersion: $ver\n\n";
+    exit;
+}
+
+if ($show_man) {
+    # User perldoc to generate the man documentation.
     system("perldoc $0");
     exit($ok ? 0 : 2);
 }
+
+print "Staring $0 ..\n" if $verbose; 
 
 # A full dsn can be passed at the command line or components
 # can be put together
@@ -516,6 +539,7 @@ sub last_insert_id {
 # this is an attempt to see if I can get the DSNs to parse 
 # for some reason, this is returning the driver information in the
 # place of scheme
+
 sub parse_dsn {
     my ($dsn) = @_;
     $dsn =~ s/^(dbi):(\w*?)(?:\((.*?)\))?://i or return;
@@ -526,11 +550,48 @@ sub parse_dsn {
 }
 
 
+sub print_help {
+
+    # Print requested help or exit.
+    # Options are to just print the full 
+    my ($opt) = @_;
+
+    my $usage = "USAGE:\n". 
+	"  phyopt.pl -i InFile -o OutFile";
+    my $args = "REQUIRED ARGUMENTS:\n".
+	"  --dsn          # Not really. just here for now.\n".
+	"\n".
+	"OPTIONS:\n".
+	"  --dbname       # Name of the database to connect to\n".
+	"  --host         # Database host\n".
+	"  --driver       # Driver for connecting to the database\n".
+	"  --dbuser       # Name to log on to the database with\n".
+	"  --dbpass       # Password to log on to the database with\n".
+	"  --tree         # Name of the tree to optimize\n".
+	"  --version      # Show the program version\n".     
+	"  --usage        # Show program usage\n".
+	"  --help         # Show this help message\n".
+	"  --man          # Open full program manual\n".
+	"  --verbose      # Run the program with maximum output\n". 
+	"  --quiet        # Run program with minimal output\n";
+	
+    if ($opt =~ "full") {
+	print "\n$usage\n\n";
+	print "$args\n\n";
+    }
+    else {
+	print "\n$usage\n\n";
+    }
+    
+    exit;
+}
+
+
 =head1 HISTORY
 
 Started: 07/04/2007
 
-Updated: 07/05/2007
+Updated: 07/20/2007
 
 =cut
 
@@ -548,3 +609,8 @@ Updated: 07/05/2007
 #   closure to work.
 # - Added verbose to command line to make work with
 #   tree-precompute from H. Lapp
+# 
+# 07/20/2007
+# - Added help, man, version, and usage to command line
+#   options.
+# - Added print_help subfunction
