@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/01/2007                                       |
-# UPDATED: 06/18/2007                                       |
+# UPDATED: 07/20/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Import NEXUS and Newick files from text files to the     |
@@ -126,6 +126,8 @@ use Bio::Tree::TreeI;
 #-----------------------------+
 # VARIABLE SCOPE              |
 #-----------------------------+
+my $ver = "DEV: 07/20/2007";   # Program version
+
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
 my $dsn = $ENV{DBI_DSN};       # DSN for database connection
@@ -134,17 +136,22 @@ my $format = 'newick';         # Data format used in infile
 my $db;                        # Database name (ie. biosql)
 my $host;                      # Database host (ie. localhost)
 my $driver;                    # Database driver (ie. mysql)
-my $help = 0;                  # Display help
 my $sqldir;                    # Directory that contains the sql to run
                                # to create the tables.
-my $quiet = 0;                 # Run the program in quiet mode
-                               # will not prompt for command line options
 my $tree_name;                  # The name of the tree
                                # For files with multiple trees, this may
                                # be used as a base name to name the trees with
 my $statement;                 # Var to hold SQL statement string
 my $sth;                       # Statement handle for SQL statement object
 
+# BOOLEANS
+my $verbose = 0;
+my $show_help = 0;             # Display help
+my $show_man = 0;              # Show the man page via perldoc
+my $show_usage = 0;            # Show the basic usage for the program
+my $show_version = 0;          # Show the program version
+my $quiet = 0;                 # Run the program in quiet mode
+                               # will not prompt for command line options
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
@@ -159,7 +166,11 @@ my $ok = GetOptions("d|dsn=s"    => \$dsn,
 		    "host=s"     => \$host,
 		    "t|tree=s"   => \$tree_name,
 		    "q|quiet"    => \$quiet,
-		    "h|help"     => \$help);
+		    "verbose"    => \$verbose,
+		    "version"    => \$show_version,
+		    "man"        => \$show_man,
+		    "usage"      => \$show_usage,
+		    "h|help"     => \$show_help);
 
 # TO DO: Normalize format to 
 
@@ -169,10 +180,34 @@ $format = &in_format_check($format);
 
 
 # SHOW HELP
-if($help || (!$ok)) {
+#if($show_help || (!$ok)) {
+#    system("perldoc $0");
+#    exit($ok ? 0 : 2);
+#}
+
+#-----------------------------+
+# SHOW REQUESTED HELP         |
+#-----------------------------+
+if ($show_usage) {
+    print_help("");
+}
+
+if ($show_help || (!$ok) ) {
+    print_help("full");
+}
+
+if ($show_version) {
+    print "\n$0:\nVersion: $ver\n\n";
+    exit;
+}
+
+if ($show_man) {
+    # User perldoc to generate the man documentation.
     system("perldoc $0");
     exit($ok ? 0 : 2);
 }
+
+print "Staring $0 ..\n" if $verbose; 
 
 # A full dsn can be passed at the command line or components
 # can be put together
@@ -615,12 +650,49 @@ sub parse_dsn {
     return ($scheme, $driver, $attr, $attr_hash, $dsn);
 }
 
+sub print_help {
+
+    # Print requested help or exit.
+    # Options are to just print the full 
+    my ($opt) = @_;
+
+    my $usage = "USAGE:\n". 
+	"  phyopt.pl -i InFile -o OutFile";
+    my $args = "REQUIRED ARGUMENTS:\n".
+	"  --infile       # File to import to the database.\n".
+	"\n".
+	"OPTIONS:\n".
+	"  --dbname       # Name of the database to connect to\n".
+	"  --host         # Database host\n".
+	"  --driver       # Driver for connecting to the database\n".
+	"  --dbuser       # Name to log on to the database with\n".
+	"  --dbpass       # Password to log on to the database with\n".
+	"  --tree         # Name of the tree to optimize\n".
+	"  --version      # Show the program version\n".     
+	"  --usage        # Show program usage\n".
+	"  --help         # Show this help message\n".
+	"  --man          # Open full program manual\n".
+	"  --verbose      # Run the program with maximum output\n". 
+	"  --quiet        # Run program with minimal output\n";
+	
+    if ($opt =~ "full") {
+	print "\n$usage\n\n";
+	print "$args\n\n";
+    }
+    else {
+	print "\n$usage\n\n";
+    }
+    
+    exit;
+}
+
+
 
 =head1 HISTORY
 
 Started: 05/30/2007
 
-Updated: 06/18/2007
+Updated: 07/20/2007
 
 =cut
 
