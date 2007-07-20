@@ -156,6 +156,8 @@ use Bio::Tree::NodeI;
 #-----------------------------+
 # VARIABLE SCOPE              |
 #-----------------------------+
+my $ver = "Dev: 07/20/2007";   # The current version number
+
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
 my $dsn = $ENV{DBI_DSN};       # DSN for database connection
@@ -199,6 +201,13 @@ my $paste_node;                 # Node that will be source of paste
 my $oper;                       # The operation that is being requested
                                 # -delete, cut, copy
 
+# BOOLEANS
+my $show_help = 0;             # Display help
+my $show_man = 0;              # Show the man page via perldoc
+my $show_usage = 0;            # Show the basic usage for the program
+my $show_version = 0;          # Show the program version
+my $verbose = 0;               # Run program in chatty mode
+
 #-----------------------------+
 # USAGE                       |
 #-----------------------------+
@@ -221,7 +230,11 @@ my $ok = GetOptions("d|dsn=s"       => \$dsn,
 		    "x|cut-node=s"  => \$cut_node,
                     "c|copy-node=s" => \$copy_node,
                     "v|paste-node=s"=> \$paste_node,
-		    "h|help"        => \$help);
+		    "verbose"       => \$verbose,
+		    "version"       => \$show_version,
+		    "man"           => \$show_man,
+		    "usage"         => \$show_usage,
+		    "h|help"        => \$show_help);
 
 
 # Exit if format string is not recognized
@@ -229,11 +242,40 @@ my $ok = GetOptions("d|dsn=s"       => \$dsn,
 $format = &in_format_check($format);
 
 
-# SHOW HELP
-if($help || (!$ok)) {
+
+## SHOW HELP
+#if($show_help || (!$ok)) {
+#    system("perldoc $0");
+#    exit($ok ? 0 : 2);
+#}
+
+
+#-----------------------------+
+# SHOW REQUESTED HELP         |
+#-----------------------------+
+
+if ($show_usage) {
+    print_help("");
+}
+
+if ($show_help || (!$ok) ) {
+    print_help("full");
+}
+
+if ($show_version) {
+    print "\n$0:\nVersion: $ver\n\n";
+    exit;
+}
+
+if ($show_man) {
+    # User perldoc to generate the man documentation.
     system("perldoc $0");
     exit($ok ? 0 : 2);
 }
+
+print "Staring $0 ..\n" if $verbose; 
+
+
 
 # A full dsn can be passed at the command line or components
 # can be put together
@@ -1153,11 +1195,48 @@ sub user_feedback
     
 } # End of UserFeedback subfunction
 
+sub print_help {
+
+    # Print requested help or exit.
+    # Options are to just print the full 
+    my ($opt) = @_;
+
+    my $usage = "USAGE:\n". 
+	"  phymod.pl -i InFile -o OutFile";
+    my $args = "REQUIRED ARGUMENTS:\n".
+	"  --dsn          # Not really. just here for now.\n".
+	"\n".
+	"OPTIONS:\n".
+	"  --dbname       # Name of the database to connect to\n".
+	"  --host         # Database host\n".
+	"  --driver       # Driver for connecting to the database\n".
+	"  --dbuser       # Name to log on to the database with\n".
+	"  --dbpass       # Password to log on to the database with\n".
+	"  --tree         # Name of the tree to optimize\n".
+	"  --version      # Show the program version\n".     
+	"  --usage        # Show program usage\n".
+	"  --help         # Show this help message\n".
+	"  --man          # Open full program manual\n".
+	"  --verbose      # Run the program with maximum output\n". 
+	"  --quiet        # Run program with minimal output\n";
+	
+    if ($opt =~ "full") {
+	print "\n$usage\n\n";
+	print "$args\n\n";
+    }
+    else {
+	print "\n$usage\n\n";
+    }
+    
+    exit;
+}
+
+
 =head1 HISTORY
 
 Started: 07/06/2007
 
-Updated: 07/09/2007
+Updated: 07/20/2007
 
 =cut
 
