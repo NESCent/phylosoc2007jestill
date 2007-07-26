@@ -35,8 +35,6 @@
 #   or use the tree_name from the database as the output name
 #   when making report.
 #
-# NOTE:
-# - This will initially only support export of a single tree.
  
 =head1 NAME 
 
@@ -151,6 +149,8 @@ use Bio::Tree::NodeI;
 #-----------------------------+
 # VARIABLE SCOPE              |
 #-----------------------------+
+my $ver = "DEV 07/26/2007";    # Program version
+
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
 my $dsn = $ENV{DBI_DSN};       # DSN for database connection
@@ -186,7 +186,15 @@ our $tree;                      # Tree object, this has to be a package
                                 # This is my first attempt to work with
                                 # a package level var.
 
-my $help = 0;                  # Display help
+
+
+# BOOLEANS
+#my $show_help = 0;             # Display help
+my $show_man = 0;              # Show the man page via perldoc
+my $show_usage = 0;            # Show the basic usage for the program
+my $show_version = 0;          # Show the program version
+my $verbose = 0;               # Run program in chatty mode
+my $show_help = 0;                  # Display help
 my $quiet = 0;                 # Run the program in quiet mode
                                # will not prompt for command line options
 my $show_node_id = 0;          # Include the database node_id in the output
@@ -205,9 +213,13 @@ my $ok = GetOptions("d|dsn=s"       => \$dsn,
 		    "host=s"        => \$host,
 		    "t|tree=s"      => \$tree_name,
 		    "parent-node=s" => \$parent_node,
-		    "db-node-id"  => \$show_node_id,
-		    "q|quiet"     => \$quiet,
-		    "h|help"      => \$help);
+		    "db-node-id"    => \$show_node_id,
+		    "q|quiet"       => \$quiet,
+		    "verbose"       => \$verbose,
+		    "version"       => \$show_version,
+		    "man"           => \$show_man,
+		    "usage"         => \$show_usage,
+		    "h|help"        => \$show_help);
 
 # TO DO: Normalize format to 
 
@@ -215,11 +227,36 @@ my $ok = GetOptions("d|dsn=s"       => \$dsn,
 #print "Requested format:$format\n";
 $format = &in_format_check($format);
 
-# SHOW HELP
-if($help || (!$ok)) {
+
+
+#-----------------------------+
+# SHOW REQUESTED HELP         |
+#-----------------------------+
+
+if ($show_usage) {
+    print_help("");
+}
+
+if ($show_help || (!$ok) ) {
+    print_help("full");
+}
+
+if ($show_version) {
+    print "\n$0:\nVersion: $ver\n\n";
+    exit;
+}
+
+if ($show_man) {
+    # User perldoc to generate the man documentation.
     system("perldoc $0");
     exit($ok ? 0 : 2);
 }
+
+## SHOW HELP
+#if($show_help || (!$ok)) {
+#    system("perldoc $0");
+#    exit($ok ? 0 : 2);
+#}
 
 # A full dsn can be passed at the command line or components
 # can be put together
@@ -730,6 +767,43 @@ sub parse_dsn {
     $driver ||= $ENV{DBI_DRIVER} || '';
     $attr_hash = { split /\s*=>?\s*|\s*,\s*/, $attr, -1 } if $attr;
     return ($scheme, $driver, $attr, $attr_hash, $dsn);
+}
+
+
+sub print_help {
+
+    # Print requested help or exit.
+    # Options are to just print the full 
+    my ($opt) = @_;
+
+    my $usage = "USAGE:\n". 
+	"  phyqry.pl -i InFile -o OutFile";
+    my $args = "REQUIRED ARGUMENTS:\n".
+	"  --dsn          # Not really. just here for now.\n".
+	"\n".
+	"OPTIONS:\n".
+	"  --dbname       # Name of the database to connect to\n".
+	"  --host         # Database host\n".
+	"  --driver       # Driver for connecting to the database\n".
+	"  --dbuser       # Name to log on to the database with\n".
+	"  --dbpass       # Password to log on to the database with\n".
+	"  --tree         # Name of the tree to optimize\n".
+	"  --version      # Show the program version\n".     
+	"  --usage        # Show program usage\n".
+	"  --help         # Show this help message\n".
+	"  --man          # Open full program manual\n".
+	"  --verbose      # Run the program with maximum output\n". 
+	"  --quiet        # Run program with minimal output\n";
+	
+    if ($opt =~ "full") {
+	print "\n$usage\n\n";
+	print "$args\n\n";
+    }
+    else {
+	print "\n$usage\n\n";
+    }
+    
+    exit;
 }
 
 
