@@ -221,7 +221,6 @@ my $ok = GetOptions("d|dsn=s"       => \$dsn,
 		    "usage"         => \$show_usage,
 		    "h|help"        => \$show_help);
 
-# TO DO: Normalize format to 
 
 # Exit if format string is not recognized
 #print "Requested format:$format\n";
@@ -251,12 +250,6 @@ if ($show_man) {
     system("perldoc $0");
     exit($ok ? 0 : 2);
 }
-
-## SHOW HELP
-#if($show_help || (!$ok)) {
-#    system("perldoc $0");
-#    exit($ok ? 0 : 2);
-#}
 
 # A full dsn can be passed at the command line or components
 # can be put together

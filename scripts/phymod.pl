@@ -212,12 +212,13 @@ my $verbose = 0;               # Run program in chatty mode
 # USAGE                       |
 #-----------------------------+
 # TO DO: Add full set of usage statements
-my $usage = "\nphymod.pl -h for help\n";
+#my $usage = "\nphymod.pl -h for help\n";
 
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
-my $ok = GetOptions("d|dsn=s"       => \$dsn,
+my $ok = GetOptions(
+		    "d|dsn=s"       => \$dsn,
                     "u|dbuser=s"    => \$usrname,
 		    "i|infile=s"    => \$infile,
                     "f|format=s"    => \$format,
@@ -230,6 +231,7 @@ my $ok = GetOptions("d|dsn=s"       => \$dsn,
 		    "x|cut-node=s"  => \$cut_node,
                     "c|copy-node=s" => \$copy_node,
                     "v|paste-node=s"=> \$paste_node,
+		    # BOOLEANS
 		    "verbose"       => \$verbose,
 		    "version"       => \$show_version,
 		    "man"           => \$show_man,
@@ -274,8 +276,6 @@ if ($show_man) {
 }
 
 print "Staring $0 ..\n" if $verbose; 
-
-
 
 # A full dsn can be passed at the command line or components
 # can be put together
@@ -328,11 +328,11 @@ elsif ($paste_node && $cut_node) {
 elsif ($paste_node && $copy_node) {
     $oper = "copynode";
 }else{
+    print "\a";
     print "\nERROR: I don't understand your request.\n";
-    print "$usage\n";
+    print_help("");
     exit;
 }
-
 
 #print "Requested operation is $oper\n";
 #exit;
