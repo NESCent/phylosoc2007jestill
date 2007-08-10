@@ -41,7 +41,7 @@ PhyInit.pl - Initialize a phyloinformatics database.
 
 =head1 SYNOPSIS
 
-  Usage: PhyInit.pl
+  Usage: phyinit.pl
         --dsn        # The DSN string the database to connect to
         --dbname     # Name of database to use
         --dbuser     # user name to connect with
@@ -69,6 +69,8 @@ the DSN of the database to connect to; default is the value in the
 environment variable DBI_DSN. If DBI_DSN has not been defined and
 the string is not passed to the command line, the dsn will be 
 constructed from --driver, --dbname, --host
+
+DSN must be in the form:
 
 Example: DBI:mysql:database=biosql;host=localhost
 
@@ -130,6 +132,8 @@ use Getopt::Long;
 #-----------------------------+
 # VARIABLE SCOPE              |
 #-----------------------------+
+my $VERSION = "1.0";
+
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
 my $dsn = $ENV{DBI_DSN};       # DSN for database connection
@@ -139,8 +143,19 @@ my $driver;                    # Database driver (ie. mysql)
 my $help = 0;                  # Display help
 my $sqldir;                    # Directory that contains the sql to run
                                # to create the tables.
+#my $quiet = 0;                 # Run the program in quiet mode
+#
+                               # will not prompt for command line options
+# BOOLEANS
+my $show_help = 0;             # Display help
 my $quiet = 0;                 # Run the program in quiet mode
                                # will not prompt for command line options
+my $show_node_id = 0;          # Include the database node_id in the output
+my $show_man = 0;              # Show the man page via perldoc
+my $show_usage = 0;            # Show the basic usage for the program
+my $show_version = 0;          # Show the program version
+my $verbose;                   # Boolean, but chatty or not
+
 
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
@@ -148,18 +163,50 @@ my $quiet = 0;                 # Run the program in quiet mode
 my $ok = GetOptions("d|dsn=s"    => \$dsn,
                     "u|dbuser=s" => \$usrname,
                     "p|dbpass=s" => \$pass,
+		    # sqldir will be used when multiple dbases are supported
 		    "s|sqldir=s" => \$sqldir,
 		    "driver=s"   => \$driver,
 		    "dbname=s"   => \$db,
 		    "host=s"     => \$host,
 		    "q|quiet"    => \$quiet,
-		    "h|help"     => \$help);
+                    "verbose"    => \$verbose,
+		    "version"    => \$show_version,
+		    "man"        => \$show_man,
+		    "usage"      => \$show_usage,
+		    "h|help"     => \$show_help,);
 
-# SHOW HELP
-if($help || (!$ok)) {
+
+#-----------------------------+
+# SHOW REQUESTED HELP         |
+#-----------------------------+
+
+if ($show_usage) {
+    print_help("");
+}
+
+if ($show_help || (!$ok) ) {
+    print_help("full");
+}
+
+if ($show_version) {
+    print "\n$0:\nVersion: $VERSION\n\n";
+    exit;
+}
+
+if ($show_man) {
+    # User perldoc to generate the man documentation.
     system("perldoc $0");
     exit($ok ? 0 : 2);
 }
+
+print "Staring $0 ..\n" if $verbose; 
+
+
+## SHOW HELP
+#if($show_help || (!$ok)) {
+#    system("perldoc $0");
+#    exit($ok ? 0 : 2);
+#}
 
 # A full dsn can be passed at the command line or components
 # can be put together
@@ -437,14 +484,15 @@ unless ($sqldir)
     $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_tree".
 	" FOREIGN KEY (tree_id) REFERENCES tree (tree_id);";
     $dbh->do($SetKey);
-    
-    $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_bioentry".
-	" FOREIGN KEY (bioentry_id) REFERENCES bioentry (bioentry_id);";
-    $dbh->do($SetKey);
+  
+    # The following not working on mysql 5.0 on MacOS10.4 $SetKey =
+#    "ALTER TABLE node ADD CONSTRAINT FKnode_bioentry".  " FOREIGN KEY
+#    (bioentry_id) REFERENCES bioentry (bioentry_id);";
+#    $dbh->do($SetKey);
 
-    $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_taxon".
-	" FOREIGN KEY (taxon_id) REFERENCES taxon (taxon_id);";
-    $dbh->do($SetKey);
+#    $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_taxon".
+#	" FOREIGN KEY (taxon_id) REFERENCES taxon (taxon_id);";
+#    $dbh->do($SetKey);
 
     $SetKey = "ALTER TABLE edge ADD CONSTRAINT FKedge_child".
 	" FOREIGN KEY (child_node_id) REFERENCES node (node_id)".
@@ -662,11 +710,48 @@ sub HowManyRecords
 
 }
 
+sub print_help {
+
+    # Print requested help or exit.
+    # Options are to just print the full 
+    my ($opt) = @_;
+
+    my $usage = "USAGE:\n". 
+	"  phyinit.pl -d dsn";
+    my $args = "REQUIRED ARGUMENTS:\n".
+	"  --dsn          # Not really. just here for now.\n".
+	"\n".
+	"OPTIONS:\n".
+	"  --dbname       # Name of the database to connect to\n".
+	"  --host         # Database host\n".
+	"  --driver       # Driver for connecting to the database\n".
+	"  --dbuser       # Name to log on to the database with\n".
+	"  --dbpass       # Password to log on to the database with\n".
+	"  --tree         # Name of the tree to optimize\n".
+	"  --version      # Show the program version\n".     
+	"  --usage        # Show program usage\n".
+	"  --help         # Show this help message\n".
+	"  --man          # Open full program manual\n".
+	"  --verbose      # Run the program with maximum output\n". 
+	"  --quiet        # Run program with minimal output\n";
+	
+    if ($opt =~ "full") {
+	print "\n$usage\n\n";
+	print "$args\n\n";
+    }
+    else {
+	print "\n$usage\n\n";
+    }
+    
+    exit;
+}
+
+
 =head1 HISTORY
 
 Started: 05/30/2007
 
-Updated: 06/06/2007
+Updated: 09/07/2007
 
 =cut
 
