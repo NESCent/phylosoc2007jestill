@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 #-----------------------------------------------------------+
 #                                                           |
-# PhyInit.pl - Initialize a phyloinformatics database       |
+# phyinit.pl - Initialize a phyloinformatics database       |
 #                                                           |
 #-----------------------------------------------------------+
 #                                                           |
@@ -37,26 +37,28 @@
 
 =head1 NAME 
 
-PhyInit.pl - Initialize a phyloinformatics database.
+phyinit.pl - Initialize a phyloinformatics database.
 
 =head1 SYNOPSIS
 
   Usage: phyinit.pl
+
+        REQUIRED OPTIONS:
         --dsn        # The DSN string the database to connect to
         --dbname     # Name of database to use
         --dbuser     # user name to connect with
         --dbpass     # password to connect with
         --driver     # "mysql", "Pg", "Oracle" (default "mysql")
         --host       # optional: host to connect with
+        --sqldir     # SQL Dir that contains the SQL to create tables
         --help       # Print this help message
         --quiet      # Run the program in quiet mode.
-        --sqldir     # SQL Dir that contains the SQL to create tables
                    
 
 =head1 DESCRIPTION
 
-Initialize a BioSQL database with the phyloinformatics tables. This will
-initially only work with MySQL, but other databases can later be made 
+Initialize a BioSQL database with the phylodb tables. This will
+initially only work with MySQL, but other databases drivers can later be made 
 available with the driver argument.
 
 =head1 ARGUMENTS
@@ -65,14 +67,14 @@ available with the driver argument.
 
 =item -d, --dsn
 
-the DSN of the database to connect to; default is the value in the
+The DSN of the database to connect to; default is the value in the
 environment variable DBI_DSN. If DBI_DSN has not been defined and
 the string is not passed to the command line, the dsn will be 
 constructed from --driver, --dbname, --host
 
 DSN must be in the form:
 
-Example: DBI:mysql:database=biosql;host=localhost
+DBI:mysql:database=biosql;host=localhost
 
 =item -u, --dbuser
 
@@ -109,6 +111,10 @@ Print the help message.
 Print the program in quiet mode. No output will be printed to STDOUT
 and the user will not be prompted for intput.
 
+=item --verbose
+
+Execute the program in verbose mode.
+
 =back
 
 =head1 AUTHORS
@@ -140,13 +146,10 @@ my $dsn = $ENV{DBI_DSN};       # DSN for database connection
 my $db;                        # Database name (ie. biosql)
 my $host;                      # Database host (ie. localhost)
 my $driver;                    # Database driver (ie. mysql)
-my $help = 0;                  # Display help
 my $sqldir;                    # Directory that contains the sql to run
                                # to create the tables.
-#my $quiet = 0;                 # Run the program in quiet mode
-#
-                               # will not prompt for command line options
 # BOOLEANS
+my $help = 0;                  # Display help
 my $show_help = 0;             # Display help
 my $quiet = 0;                 # Run the program in quiet mode
                                # will not prompt for command line options
@@ -154,27 +157,29 @@ my $show_node_id = 0;          # Include the database node_id in the output
 my $show_man = 0;              # Show the man page via perldoc
 my $show_usage = 0;            # Show the basic usage for the program
 my $show_version = 0;          # Show the program version
-my $verbose;                   # Boolean, but chatty or not
-
+my $verbose = 0;               # Boolean, but chatty or not
 
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
-my $ok = GetOptions("d|dsn=s"    => \$dsn,
+my $ok = GetOptions(# REQUIRED OPTIONS
+                    "d|dsn=s"    => \$dsn,
                     "u|dbuser=s" => \$usrname,
                     "p|dbpass=s" => \$pass,
+		    # ADDITIONAL OPTIONS
 		    # sqldir will be used when multiple dbases are supported
 		    "s|sqldir=s" => \$sqldir,
+		    # ALTERNATIVE OPTIONS
 		    "driver=s"   => \$driver,
 		    "dbname=s"   => \$db,
 		    "host=s"     => \$host,
+		    # BOOLEANS
 		    "q|quiet"    => \$quiet,
                     "verbose"    => \$verbose,
 		    "version"    => \$show_version,
 		    "man"        => \$show_man,
 		    "usage"      => \$show_usage,
 		    "h|help"     => \$show_help,);
-
 
 #-----------------------------+
 # SHOW REQUESTED HELP         |
@@ -201,13 +206,16 @@ if ($show_man) {
 
 print "Staring $0 ..\n" if $verbose; 
 
-
-## SHOW HELP
-#if($show_help || (!$ok)) {
-#    system("perldoc $0");
-#    exit($ok ? 0 : 2);
-#}
-
+#-----------------------------+
+# DSN STRING                  |
+#-----------------------------+
+# Alternatives for providing the DSN
+# (1) ENV
+#     DBI_DSN
+# (2) Command line string
+#     --dsn
+# (3) Command line components
+#     --db, --host, --driver
 # A full dsn can be passed at the command line or components
 # can be put together
 unless ($dsn) {
@@ -302,16 +310,19 @@ my $DelInfo = "";     # Info on the
 
 # DETERMINE IF ANY TABLES WOULD NEED TO BE DELETED
 foreach my $Tbl (@TblList) {
-    if (&DoesTableExist($dbh, $Tbl)) {
-	#print "The table $tblQryCat already exits.\n";
+    print "Checking table: $Tbl\n" if $verbose;
+    if (&does_table_exist($dbh, $Tbl)) {
 	$Num2Del++;
 	push @Tbl2Del, $Tbl;
 	my $NumRecs = &HowManyRecords($dbh, $Tbl);
 	$DelInfo = $DelInfo."\t".$Tbl."( ".$NumRecs." Records )\n";
-    } # End of DoesTableExist
+    } # End of does_table_exist
 } # End of for each individual table
 
 # WARN THE USER 
+# This currently not working on the Mac
+# The following gives 0 so this need to 
+
 if ($Num2Del > 0) {
 
     print "\nThe following tables will be deleted:\n";
@@ -664,28 +675,34 @@ sub UserFeedback
     
 } # End of UserFeedback subfunction
 
-sub DoesTableExist
+sub does_table_exist
 {
 #-----------------------------+
 # CHECK IF THE MYSQL TABLE    |
 # ALREADY EXISTS              |
 #-----------------------------+
-# CODE FROM
+# CODE MODIFIED FROM
 # http://lena.franken.de/perl_hier/databases.html
-# Makes use of global database handle dbh
 
     my ($dbh, $whichtable) = @_;
-    #my ($whichtable) = @_;
     my ($table,@alltables,$found);
     @alltables = $dbh->tables();
     $found = 0;
     foreach $table (@alltables) {
-	$found=1 if ($table eq "`".$whichtable."`");
-    }
+	# Since the schema name may be returned as a prefix
+	# we may need to  strip the schema name
+	if ( $table =~ m/(.*)\.(.*)/ ){
+	    # $table in the form of 'biosql'.'node'
+	    $found=1 if ($2 eq "`".$whichtable."`");
+	}
+	else {
+	    # $table in the form of 'node'
+	    $found=1 if ($table eq "`".$whichtable."`");
+	}
+    } # End of for each table in the array alltables
     # return true if table was found, false if table was not found
     return $found;
 }
-
 
 sub HowManyRecords
 {
@@ -768,7 +785,7 @@ Updated: 09/07/2007
 # - Added password input with echo off for security
 # - Added CreateMySQLDB subfunction
 # - Added UserFeedback subfunction
-# - Added DoesTableExist subfunction
+# - Added does_table_exist subfunction
 # - Added parse of dsn string to: $db, $host, $driver 
 # - Added H. Lapp and W. Piel as authors since I am using 
 #   the SQL they created at the hackathon
