@@ -1,14 +1,14 @@
 #!/usr/bin/perl -w
 #-----------------------------------------------------------+
 #                                                           |
-# phyinit.pl - Initialize a phyloinformatics database       |
+# phyinit.pl - Initialize a PhyloDB database                |
 #                                                           |
 #-----------------------------------------------------------+
 #                                                           |
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 05/30/2007                                       |
-# UPDATED: 06/07/2007                                       |
+# UPDATED: 08/13/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Initialize a BioSQL database with the phyloinformatics   |
@@ -28,104 +28,13 @@
 
 # TO DO:
 # - Create the non-phylo tables components of BioSQL
-# - Run appropriate SQL code in sqldir
-# - Can run system cmd like
-#   source /home/jestill/cvsloc/biosql-schema/sql/biosqldb-mysql.sql
-#   to establish the SQL schema instead of putting code here
+# - Run appropriate SQL code in sqldir if desired
+#   Can run system cmd like
+#   source $sqldie/biosqldb-mysql.sql
+#   to establish the SQL schema instead of putting code directly
+#   in the perl code.
 
 # NOTE: Variables from command line follow load_ncbi_taxonomy.pl
-
-=head1 NAME 
-
-phyinit.pl - Initialize a phyloinformatics database.
-
-=head1 SYNOPSIS
-
-  Usage: phyinit.pl
-
-        REQUIRED OPTIONS:
-        --dsn        # The DSN string the database to connect to
-        --dbname     # Name of database to use
-        --dbuser     # user name to connect with
-        --dbpass     # password to connect with
-        --driver     # "mysql", "Pg", "Oracle" (default "mysql")
-        --host       # optional: host to connect with
-        --sqldir     # SQL Dir that contains the SQL to create tables
-        --help       # Print this help message
-        --quiet      # Run the program in quiet mode.
-                   
-
-=head1 DESCRIPTION
-
-Initialize a BioSQL database with the phylodb tables. This will
-initially only work with MySQL, but other databases drivers can later be made 
-available with the driver argument.
-
-=head1 ARGUMENTS
-
-=over
-
-=item -d, --dsn
-
-The DSN of the database to connect to; default is the value in the
-environment variable DBI_DSN. If DBI_DSN has not been defined and
-the string is not passed to the command line, the dsn will be 
-constructed from --driver, --dbname, --host
-
-DSN must be in the form:
-
-DBI:mysql:database=biosql;host=localhost
-
-=item -u, --dbuser
-
-The user name to connect with; default is the value in the environment
-variable DBI_USER.
-
-This user must have permission to create databases.
-
-=item -p, --dbpass
-
-password to connect with; default is the value in the environment
-variable DBI_PASSWORD. If this is not provided at the command line
-the user is prompted.
-
-=item --host
-
-The database host to connect to; default is localhost.
-
-=item --dbname
-
-The database name to connect to; default is biosql.
-
-=item --driver
-
-The database driver to connect with; default is mysql.
-Options other then mysql are currently not supported.
-    
-=item -h, --help
-
-Print the help message.
-
-=item -q, --quiet
-
-Print the program in quiet mode. No output will be printed to STDOUT
-and the user will not be prompted for intput.
-
-=item --verbose
-
-Execute the program in verbose mode.
-
-=back
-
-=head1 AUTHORS
-
-James C. Estill E<lt>JamesEstill at gmail.comE<gt>
-
-Hilmar Lapp, E<lt>hlapp at gmx.netE<gt>
-
-Bill Piel, E<lt>william.piel at yale.eduE<gt>
-
-=cut
 
 #-----------------------------+
 # INCLUDES                    |
@@ -133,7 +42,6 @@ Bill Piel, E<lt>william.piel at yale.eduE<gt>
 use strict;
 use DBI;
 use Getopt::Long;
-#use Bio::Tree;
 
 #-----------------------------+
 # VARIABLE SCOPE              |
@@ -162,17 +70,17 @@ my $verbose = 0;               # Boolean, but chatty or not
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
-my $ok = GetOptions(# REQUIRED OPTIONS
+my $ok = GetOptions(# REQUIRED ARGUMENTS
                     "d|dsn=s"    => \$dsn,
                     "u|dbuser=s" => \$usrname,
                     "p|dbpass=s" => \$pass,
-		    # ADDITIONAL OPTIONS
-		    # sqldir will be used when multiple dbases are supported
-		    "s|sqldir=s" => \$sqldir,
-		    # ALTERNATIVE OPTIONS
+		    # ALTERNATIVE TO --dsn
 		    "driver=s"   => \$driver,
 		    "dbname=s"   => \$db,
 		    "host=s"     => \$host,
+		    # ADDITIONAL OPTIONS
+		    # sqldir will be used when multiple dbases are supported
+		    "s|sqldir=s" => \$sqldir,
 		    # BOOLEANS
 		    "q|quiet"    => \$quiet,
                     "verbose"    => \$verbose,
@@ -211,20 +119,23 @@ print "Staring $0 ..\n" if $verbose;
 #-----------------------------+
 # Alternatives for providing the DSN
 # (1) ENV
-#     DBI_DSN
+#     ie. the users .bashrc containsxs
+#     DBI_DSN='DBI:mysql:database=biosql;host=localhost'
 # (2) Command line string
-#     --dsn
+#     --dsn DBI:mysql:database=biosql;host=localhost
 # (3) Command line components
-#     --db, --host, --driver
+#     --db biosql --host localhost --driver mysql
 # A full dsn can be passed at the command line or components
 # can be put together
-unless ($dsn) {
+
+if ( ($db) & ($host) & ($driver) ) {
     # Set default values if none given at command line
     $db = "biosql" unless $db; 
     $host = "localhost" unless $host;
     $driver = "mysql" unless $driver;
     $dsn = "DBI:$driver:database=$db;host=$host";
-} else {
+} 
+elsif ($dsn) {
     # We need to parse the database name, driver etc from the dsn string
     # in the form of DBI:$driver:database=$db;host=$host
     # Other dsn strings will not be parsed properly
@@ -236,11 +147,16 @@ unless ($dsn) {
     ($cruft, $db) = split(/=/,$predb);
     ($cruft, $host) = split(/=/,$prehost);
     # Print for debug
-    print "\tPRE:\t$prefix\n";
-    print "\tDRIVER:\t$driver\n";
-    print "\tSUF:\t$suffix\n";
-    print "\tDB:\t$db\n";
-    print "\tHOST:\t$host\n";
+    print "\tPRE:\t$prefix\n" if $verbose;
+    print "\tDRIVER:\t$driver\n" if $verbose;
+    print "\tSUF:\t$suffix\n" if $verbose;
+    print "\tDB:\t$db\n" if $verbose;
+    print "\tHOST:\t$host\n" if $verbose;
+}
+else {
+    # The variables to create a dsn have not been passed
+    print "ERROR: A valid dsn can not be created\n";
+    exit;
 }
 
 #-----------------------------+
@@ -259,12 +175,12 @@ unless ($pass) {
 }
 
 # Show variables for debug
-print "DEBUG INFO\n";
-print "\tUSER:\t$usrname\n";
-print "\tDRIVER:\t$driver\n";
-print "\tHOST:\t$host\n";
-print "\tDB:\t$db\n";
-print "\tDSN:\t$dsn\n";
+print "DEBUG INFO\n" if $verbose;
+print "\tUSER:\t$usrname\n" if $verbose;
+print "\tDRIVER:\t$driver\n" if $verbose;
+print "\tHOST:\t$host\n" if $verbose;
+print "\tDB:\t$db\n" if $verbose;
+print "\tDSN:\t$dsn\n" if $verbose;
 
 #-----------------------------+
 # CREATE DATABASE IF NEEDED   |
@@ -343,7 +259,7 @@ if ($Num2Del > 0) {
 	$dbh->do("SET FOREIGN_KEY_CHECKS=0;");
 
 	foreach my $Tbl (@Tbl2Del){
-	    print "Dropping table: $Tbl\n";
+	    print "Dropping table: $Tbl\n" if $verbose;
 	    my $DropTable = "DROP TABLE $Tbl;";
 	    #$dbh->do("DROP TABLE ".$Tbl." CASCADE;");
 	    $dbh->do( $DropTable );
@@ -382,7 +298,7 @@ unless ($sqldir)
     #-----------------------------+
     # NODE                        |
     #-----------------------------+
-    print "Creating table: node\n";
+    print "Creating table: node\n" if $verbose;
     my $CreateNode = "CREATE TABLE node (".
 	" node_id INT(10) UNSIGNED NOT NULL auto_increment,".
 	" label VARCHAR(255),".
@@ -410,7 +326,7 @@ unless ($sqldir)
     #-----------------------------+
     # EDGES                       |
     #-----------------------------+
-    print "Creating table: edge\n";
+    print "Creating table: edge\n" if $verbose;
     my $CreateEdge = "CREATE TABLE edge (".
 	" edge_id INT(10) UNSIGNED NOT NULL auto_increment,".
 	" child_node_id INT(10) UNSIGNED NOT NULL,".
@@ -426,7 +342,7 @@ unless ($sqldir)
     #-----------------------------+
     # NODE PATH                   |
     #-----------------------------+
-    print "Creating table: node_path\n";
+    print "Creating table: node_path\n" if $verbose;
     #Transitive closure over edges between nodes
     my $CreateNodePath = "CREATE TABLE node_path (".
 	" child_node_id INT(10) UNSIGNED NOT NULL,".
@@ -444,7 +360,7 @@ unless ($sqldir)
     #-----------------------------+
     # EDGE ATTRIBUTES             |
     #-----------------------------+
-    print "Creating table: edge_attribute_value\n";
+    print "Creating table: edge_attribute_value\n" if $verbose;
     my $CreateEdgeAtt = "CREATE TABLE edge_attribute_value (".
 	" value text,".
 	" edge_id INT(10) UNSIGNED NOT NULL,".
@@ -459,7 +375,7 @@ unless ($sqldir)
     #-----------------------------+
     # NODE ATTRIBUTE VALUES       |
     #-----------------------------+
-    print "Creating table: node_attribute_value\n";
+    print "Creating table: node_attribute_value\n" if $verbose;
     my $CreateNodeAtt = "CREATE TABLE node_attribute_value (".
 	" value text,".
 	" node_id INT(10) UNSIGNED NOT NULL,".
@@ -474,7 +390,7 @@ unless ($sqldir)
     #-----------------------------+
     # SET FOREIGN KEY CONSTRAINTS |
     #-----------------------------+
-    print "Adding Foreign Key Constraints.\n";
+    print "Adding Foreign Key Constraints.\n" if $verbose;
     my $SetKey; # Var to hold the Set Key SQL string
 
     # May want to add ON DELETE CASCADE to these so
@@ -497,9 +413,9 @@ unless ($sqldir)
     $dbh->do($SetKey);
   
     # The following not working on mysql 5.0 on MacOS10.4 $SetKey =
-#    "ALTER TABLE node ADD CONSTRAINT FKnode_bioentry".  " FOREIGN KEY
-#    (bioentry_id) REFERENCES bioentry (bioentry_id);";
-#    $dbh->do($SetKey);
+    $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_bioentry".  
+	" FOREIGN KEY (bioentry_id) REFERENCES bioentry (bioentry_id);";
+    $dbh->do($SetKey);
 
 #    $SetKey = "ALTER TABLE node ADD CONSTRAINT FKnode_taxon".
 #	" FOREIGN KEY (taxon_id) REFERENCES taxon (taxon_id);";
@@ -567,12 +483,12 @@ exit;
 
 sub ConnectToDb {
     my ($cstr) = @_;
-    return ConnectToMySQL(@_) if $cstr =~ /:mysql:/i;
+    return connect_to_mysql(@_) if $cstr =~ /:mysql:/i;
     return ConnectToPg(@_) if $cstr =~ /:pg:/i;
     die "can't understand driver in connection string: $cstr\n";
 }
 
-sub ConnectToMySQL {
+sub connect_to_mysql {
     
     my ($cstr, $user, $pass) = @_;
     
@@ -643,8 +559,7 @@ sub CreateMySQLDB {
 } # End of CreateMySQLDB subfunction
 
 
-sub UserFeedback
-{
+sub UserFeedback {
 #-----------------------------+
 # USER FEEDBACK SUBFUNCTION   |
 #-----------------------------+
@@ -675,8 +590,7 @@ sub UserFeedback
     
 } # End of UserFeedback subfunction
 
-sub does_table_exist
-{
+sub does_table_exist {
 #-----------------------------+
 # CHECK IF THE MYSQL TABLE    |
 # ALREADY EXISTS              |
@@ -704,8 +618,7 @@ sub does_table_exist
     return $found;
 }
 
-sub HowManyRecords
-{
+sub HowManyRecords {
 #-----------------------------+
 # COUNT HOW MANY RECORDS      |
 # EXIST IN THE MYSQL TABLE    |
@@ -734,24 +647,24 @@ sub print_help {
     my ($opt) = @_;
 
     my $usage = "USAGE:\n". 
-	"  phyinit.pl -d dsn";
-    my $args = "REQUIRED ARGUMENTS:\n".
-	"  --dsn          # Not really. just here for now.\n".
-	"\n".
-	"OPTIONS:\n".
-	"  --dbname       # Name of the database to connect to\n".
-	"  --host         # Database host\n".
-	"  --driver       # Driver for connecting to the database\n".
-	"  --dbuser       # Name to log on to the database with\n".
-	"  --dbpass       # Password to log on to the database with\n".
-	"  --tree         # Name of the tree to optimize\n".
-	"  --version      # Show the program version\n".     
-	"  --usage        # Show program usage\n".
-	"  --help         # Show this help message\n".
-	"  --man          # Open full program manual\n".
-	"  --verbose      # Run the program with maximum output\n". 
-	"  --quiet        # Run program with minimal output\n";
-	
+	"  phyinit.pl";
+    my $args =       "REQUIRED ARGUMENTS:\n".
+      "  --dsn        # The DSN string for the DB connection\n".
+      "  --dbuser     # User name to connect with\n".
+      "  --dbpass     # User password to connect with\n".
+      "ALTERNATIVE TO --dsn:\n".
+      "  --driver     # DB Driver \"mysql\", \"Pg\", \"Oracle\"\n". 
+      "  --dbname     # Name of database to use\n".
+      "  --host       # Host to connect with (ie. localhost)\n".
+      "ADDITIONAL OPTIONS:\n".
+      "  --sqldir     # SQL Dir that contains the SQL to create tables\n".
+      "  --quiet      # Run the program in quiet mode.\n".
+      "  --verbose    # Run the program with maximum output\n".
+      "ADDITIONAL INFORMATION:\n".
+      "  --version    # Show the program version\n".     
+      "  --usage      # Show program usage\n".
+      "  --help       # Show a short help message\n".
+      "  --man        # Show full program manual\n";
     if ($opt =~ "full") {
 	print "\n$usage\n\n";
 	print "$args\n\n";
@@ -764,48 +677,322 @@ sub print_help {
 }
 
 
+=head1 NAME 
+
+phyinit.pl - Initialize a PhyloDB database.
+
+=head1 VERSION
+
+This documentation refers to phyinit version 1.0.
+
+=head1 SYNOPSIS
+  
+  USAGE: phyinit.pl -d 'DBI:mysql:database=biosql;host=localhost' 
+                    -u UserName -p dbPass
+
+      REQUIRED ARGUMENTS:
+        --dsn        # The DSN string for the DB connection
+        --dbuser     # User name to connect with
+        --dbpass     # User password to connect with
+      ALTERNATIVE TO --dsn:
+        --driver     # DB Driver "mysql", "Pg", "Oracle" 
+        --dbname     # Name of database to use
+        --host       # Host to connect with (ie. localhost)
+      ADDITIONAL OPTIONS:
+        --sqldir     # SQL Dir that contains the SQL to create tables
+        --quiet      # Run the program in quiet mode.
+	--verbose    # Run the program with maximum output
+      ADDITIONAL INFORMATION:
+	--version    # Show the program version     
+	--usage      # Show program usage
+        --help       # Show a short help message
+	--man        # Show full program manual
+
+=head1 DESCRIPTION
+
+Initialize the PhyloDB table in a BioSQL database. 
+All required tables and foreign keys will be created.
+The user will be warned before any existing data is deleted. 
+This will initially only work with MySQL, but other databases drivers will 
+later be made available with the driver argument.
+
+=head1 COMMAND LINE ARGUMENTS
+
+=head2 Required Arguments
+
+=over 2
+
+=item -d, --dsn
+
+The DSN of the database to connect to; default is the value in the
+environment variable DBI_DSN. If DBI_DSN has not been defined and
+the string is not passed to the command line, the dsn will be 
+constructed from --driver, --dbname, --host
+
+DSN must be in the form:
+
+DBI:mysql:database=biosql;host=localhost
+
+=item -u, --dbuser
+
+The user name to connect with; default is the value in the environment
+variable DBI_USER.
+
+This user must have permission to create databases.
+
+=item -p, --dbpass
+
+The password to connect with; default is the value in the environment
+variable DBI_PASSWORD. If this is not provided at the command line
+the user is prompted.
+
+=back
+
+=head2 Alternative to --dsn
+
+An alternative to passing the full dsn at the command line is to
+provide the components separately.
+
+=over 2
+
+=item --host
+
+The database host to connect to; default is localhost.
+
+=item --dbname
+
+The database name to connect to; default is biosql.
+
+=item --driver
+
+The database driver to connect with; default is mysql.
+Options other then mysql are currently not supported.
+
+=back
+
+=head2 Additional Options
+
+=over 2
+
+=item -s, --sqldir
+
+Directory containing the sql code for PhyloDB initialization.
+
+=item -q, --quiet
+
+Run the program in quiet mode. No output will be printed to STDOUT
+and the user will not be prompted for intput. B<CURRENTLY NOT IMPLEMENTED.>
+
+=item --verbose
+
+Execute the program in verbose mode.
+
+=back
+
+=head2 Additional Information
+
+=over 2
+
+=item --version
+
+Show the program version.   
+
+=item --usage      
+
+Show program usage statement.
+
+=item --help
+
+Show a short help message.
+
+=item --man
+
+Show the full program manual.
+
+=back
+
+=head1 EXAMPLES
+
+B<The --dsn argument>
+
+Example initializing a database using the --dsn argument. 
+You will be prompted for the user
+password when one is not provided at the command line. You would of course
+replace name with your user name.
+
+    phyinit.pl -u name --dsn 'DBI:mysql:database=biosql;host=localhost'
+
+B<Command line alternative to --dsn>
+
+Creating the same database as above using the dsn components passed
+at the comand line. 
+
+    phyinit.pl -u name --host localhost --dbname biosql --driver mysql
+
+=head1 DIAGNOSTICS
+
+The known error messages below are followed by possible descriptions of
+the error and possible solutions:
+
+=over 2
+
+=item B<C<DBD::mysql::db do failed: Can't create table 
+'./biosql/#sql-d2_b.frm' (errno: 150) at ./phyinit.pl 
+line 416, line 1.>>
+
+B<Description:> MySQL Error messages that make reference to errno: 150 are 
+related to problems with foreign keys. 
+This will occur when you attempt to initialize the PhyloDB tables in a database
+database that does not already contain a BioSQL schema.
+
+B<Solution:> Run the proper SQL script to create the BioSQL database.
+
+=back
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Many of the options passed at the command line can be set as 
+options in the user's environment. 
+
+=over 2
+
+=item DBI_USER
+
+User name to connect to the database.
+
+=item DBI_PASSWORD
+
+Password for the database connection
+
+=item DBI_DSN
+
+DSN for database connection.
+
+=back
+
+For example in the bash shell this would be done be editing your .bashrc file
+to contain:
+
+    export DBI_USER=yourname
+    export DBI_PASS=yourpassword
+    export DBI_DSN='DBI:mysql:database=biosql;host-localhost'
+
+When these are present in the environment, you can initialize a database
+with the above variables by simply typing phyinit.pl at the command line.
+
+=head1 DEPENDENCIES
+
+The phyinit program is dependent on the following PERL modules:
+
+=over 2
+
+=item DBI - L<http://dbi.perl.org>
+
+The PERL Database Interface (DBI) module allows for connections 
+to multiple databases.
+
+=item DBD:MySQL - 
+L<http://search.cpan.org/~capttofu/DBD-mysql-4.005/lib/DBD/mysql.pm>
+
+MySQL database driver for DBI module.
+
+=item DBD:Pg -
+L<http://search.cpan.org/~rudy/DBD-Pg-1.32/Pg.pm>
+
+PostgreSQL database driver for the DBI module.
+
+=item Getopt::Long - L<http://perldoc.perl.org/Getopt/Long.html>
+
+The Getopt module allows for the passing of command line options
+to perl scripts.
+
+=back
+
+A RDBMS is also required. This can be one of:
+
+=over 2
+
+=item MySQL - L<http://www.mysql.com>
+
+=item PostgreSQL - L<http://www.postgresql.org>
+
+=back
+
+=head1 BUGS AND LIMITATIONS
+
+Known Limitations:
+
+=over 2
+
+=item *
+Currently only stable with the MySQL Database driver.
+
+=item *
+DSN string must currently be in the form:
+DBI:mysql:database=biosql;host=localhost
+
+=item *
+Currently assumes that a valid BioSQL schema exists for the 
+database named. There is currently not check for complience to 
+this restriction.
+
+=back
+
+Please report additional problems to 
+James Estill E<lt>JamesEstill at gmail.comE<gt>
+
+=head1 SEE ALSO
+
+The program phyinit.pl is a component of a package of comand line programs
+for PhyloDB management. Additional programs include:
+
+=over
+
+=item phyimport.pl
+
+Import common phylogenetic file formats.
+
+=item phyexport.pl
+
+Export tree data in PhyloDB to common file formats.
+
+=item phyopt.pl
+
+Compute optimization values for a PhyloDB database.
+
+=item phyqry.pl
+
+Return a standard report of information for a given tree.
+
+=item phymod.pl
+
+Modify an existing phylogenetic database by deleting, adding or
+copying branches.
+
+=back
+
+=head1 LICENSE
+
+This program may be used, distributed or modified under the same
+terms as Perl itself. Please consult the Perl Artistic License
+(http://www.perl.com/pub/a/language/misc/Artistic.html) for the
+terms under which you may use, modify, or distribute this script.
+
+THIS SOFTWARE COMES AS IS, WITHOUT ANY EXPRESS OR IMPLIED
+WARRANTY. USE AT YOUR OWN RISK.
+
+=head1 AUTHORS
+
+James C. Estill E<lt>JamesEstill at gmail.comE<gt>
+
+Hilmar Lapp E<lt>hlapp at gmx.netE<gt>
+
+William Piel E<lt>william.piel at yale.eduE<gt>
+
 =head1 HISTORY
 
 Started: 05/30/2007
 
-Updated: 09/07/2007
+Updated: 08/17/2007
 
 =cut
-
-#-----------------------------------------------------------+
-# HISTORY                                                   |
-#-----------------------------------------------------------+
-# 05/30/2007 - JCE
-# - Started PhyInit.pl
-# - Pod documentation started
-# - Begin the database connection code
-# 05/31/2007 - JCE
-# - Modified command line
-# - Added code to create dsn if not provided at command line
-# - Added password input with echo off for security
-# - Added CreateMySQLDB subfunction
-# - Added UserFeedback subfunction
-# - Added does_table_exist subfunction
-# - Added parse of dsn string to: $db, $host, $driver 
-# - Added H. Lapp and W. Piel as authors since I am using 
-#   the SQL they created at the hackathon
-# - Added SQL for creation of phylo tables
-# 06/01/2007 - JCE
-# - Added the HowManyRecords subfunction
-# - Added code to check for table existence and number
-#   of records that would be deleted. User can choose
-#   not to delete
-# - Added SQL for adding foreign key constraints to
-#   phylo tables 
-# 06/06/2007 - JCE
-# - Modified SQL to create InnoDB tables instead of MyISAM 
-#   tables, this will allow for transaction support
-# - Added SET FOREIGN_KEY_CHECKS=0 to DROP TABLE CODE
-# - Added indexes to the InnoDB tables to allow foreign
-#   key constraints to work
-# - Changed all INTEGER table values to INT(10) UNSIGNED
-# 06/07/2007 - JCE
-# - Modified scheme to fit Phylo-PG v 1.2 schema
-# - Added AutoCommit => 0 to the DBI connection parameters
-#   for MySQL 
-# - Added $dbh->commit() and $dbh->disconnect() as appropriate
