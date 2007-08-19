@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/01/2007                                       |
-# UPDATED: 07/20/2007                                       |
+# UPDATED: 08/17/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Import NEXUS and Newick files from text files to the     |
@@ -22,7 +22,6 @@
 #-----------------------------------------------------------+
 #
 # TO DO:
-# - Update POD documentation
 # - The internal nodes used by TreeI will not be the same
 #   as the nodes used in the database so the DB ID will
 #   need to be fetched when adding edges to the database.
@@ -30,89 +29,6 @@
 #   from the tree to the PhyloDB node table. This would required
 #   using the taxon_id field in the node table
 # - Add edge_attribute data when available
- 
-=head1 NAME 
-
-phyimport.pl - Import phylogenetic trees from common file formats
-
-=head1 SYNOPSIS
-
-  Usage: PhyImport.pl
-        --dsn        # The DSN string the database to connect to
-                     # Must conform to:
-                     # 'DBI:mysql:database=biosql;host=localhost' 
-        --infile     # Full path to the tree file to import to the db
-        --dbuser     # User name to connect with
-        --dbpass     # Password to connect with
-        --dbname     # Name of database to use
-        --driver     # "mysql", "Pg", "Oracle" (default "mysql")
-        --host       # optional: host to connect with
-        --help       # Print this help message
-        --quiet      # Run the program in quiet mode.
-        --format     # "newick", "nexus" (default "newick")
-        --tree       # Tree name to use
-
-=head1 DESCRIPTION
-
-Import NEXUS and Newick files from text files to the PhyloDB.
-
-=head1 ARGUMENTS
-
-=over
-
-=item -d, --dsn
-
-the DSN of the database to connect to; default is the value in the
-environment variable DBI_DSN. If DBI_DSN has not been defined and
-the string is not passed to the command line, the dsn will be 
-constructed from --driver, --dbname, --host
-
-Example: DBI:mysql:database=biosql;host=localhost
-
-=item -u, --dbuser
-
-The user name to connect with; default is the value in the environment
-variable DBI_USER.
-
-This user must have permission to add data to tables.
-
-=item -p, --dbpass
-
-password to connect with; default is the value in the environment
-variable DBI_PASSWORD. If this is not provided at the command line
-the user is prompted.
-
-=item --host
-
-The database host to connect to; default is localhost.
-
-=item --dbname
-
-The database name to connect to; default is biosql.
-
-=item --driver
-
-The database driver to connect with; default is mysql.
-Options other then mysql are currently not supported.
-    
-=item -h, --help
-
-Print the help message.
-
-=item -q, --quiet
-
-Print the program in quiet mode. No output will be printed to STDOUT
-and the user will not be prompted for intput.
-
-=back
-
-=head1 AUTHORS
-
-James C. Estill E<lt>JamesEstill at gmail.comE<gt>
-
-=cut
-
-print "Staring $0 ..\n";
 
 #-----------------------------+
 # INCLUDES                    |
@@ -126,7 +42,7 @@ use Bio::Tree::TreeI;
 #-----------------------------+
 # VARIABLE SCOPE              |
 #-----------------------------+
-my $ver = "DEV: 07/20/2007";   # Program version
+my $VERSION = "1.0";           # Program version
 
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
@@ -138,7 +54,7 @@ my $host;                      # Database host (ie. localhost)
 my $driver;                    # Database driver (ie. mysql)
 my $sqldir;                    # Directory that contains the sql to run
                                # to create the tables.
-my $tree_name;                  # The name of the tree
+my $tree_name;                 # The name of the tree
                                # For files with multiple trees, this may
                                # be used as a base name to name the trees with
 my $statement;                 # Var to hold SQL statement string
@@ -152,38 +68,33 @@ my $show_usage = 0;            # Show the basic usage for the program
 my $show_version = 0;          # Show the program version
 my $quiet = 0;                 # Run the program in quiet mode
                                # will not prompt for command line options
+
 #-----------------------------+
 # COMMAND LINE OPTIONS        |
 #-----------------------------+
-my $ok = GetOptions("d|dsn=s"    => \$dsn,
+my $ok = GetOptions(# REQUIRED ARGUMENTS
+                    "d|dsn=s"    => \$dsn,
                     "u|dbuser=s" => \$usrname,
+                    "p|dbpass=s" => \$pass,
                     "i|infile=s" => \$infile,
                     "f|format=s" => \$format,
-                    "p|dbpass=s" => \$pass,
-		    "s|sqldir=s" => \$sqldir,
+		    # ALTERNATIVE TO --dsn 
 		    "driver=s"   => \$driver,
 		    "dbname=s"   => \$db,
 		    "host=s"     => \$host,
+		    # ADDITIONAL OPTIONS
 		    "t|tree=s"   => \$tree_name,
+		    # BOOLEANS
 		    "q|quiet"    => \$quiet,
 		    "verbose"    => \$verbose,
 		    "version"    => \$show_version,
 		    "man"        => \$show_man,
 		    "usage"      => \$show_usage,
-		    "h|help"     => \$show_help);
-
-# TO DO: Normalize format to 
+		    "h|help"     => \$show_help,);
 
 # Exit if format string is not recognized
-#print "Requested format:$format\n";
+print "Requested format: $format\n" if $verbose;
 $format = &in_format_check($format);
-
-
-# SHOW HELP
-#if($show_help || (!$ok)) {
-#    system("perldoc $0");
-#    exit($ok ? 0 : 2);
-#}
 
 #-----------------------------+
 # SHOW REQUESTED HELP         |
@@ -197,7 +108,7 @@ if ($show_help || (!$ok) ) {
 }
 
 if ($show_version) {
-    print "\n$0:\nVersion: $ver\n\n";
+    print "\n$0:\nVersion: $VERSION\n\n";
     exit;
 }
 
@@ -209,16 +120,14 @@ if ($show_man) {
 
 print "Staring $0 ..\n" if $verbose; 
 
-# A full dsn can be passed at the command line or components
-# can be put together
-unless ($dsn) {
+if ( ($db) & ($host) & ($driver) ) {
     # Set default values if none given at command line
     $db = "biosql" unless $db; 
     $host = "localhost" unless $host;
     $driver = "mysql" unless $driver;
     $dsn = "DBI:$driver:database=$db;host=$host";
-} else {
-    
+} 
+elsif ($dsn) {
     # We need to parse the database name, driver etc from the dsn string
     # in the form of DBI:$driver:database=$db;host=$host
     # Other dsn strings will not be parsed properly
@@ -230,12 +139,16 @@ unless ($dsn) {
     ($cruft, $db) = split(/=/,$predb);
     ($cruft, $host) = split(/=/,$prehost);
     # Print for debug
-    print "\tDSN:\t$dsn\n";
-    print "\tPRE:\t$prefix\n";
-    print "\tDRIVER:\t$driver\n";
-    print "\tSUF:\t$suffix\n";
-    print "\tDB:\t$db\n";
-    print "\tHOST:\t$host\n";
+    print "\tPRE:\t$prefix\n" if $verbose;
+    print "\tDRIVER:\t$driver\n" if $verbose;
+    print "\tSUF:\t$suffix\n" if $verbose;
+    print "\tDB:\t$db\n" if $verbose;
+    print "\tHOST:\t$host\n" if $verbose;
+}
+else {
+    # The variables to create a dsn have not been passed
+    print "ERROR: A valid dsn can not be created\n";
+    exit;
 }
 
 
@@ -294,7 +207,7 @@ my $count_trees = 0;
 
 while( $tree = $tree_in->next_tree ) {
 
-    my $tree_db_id;        # integer ID of the tree in the database
+    my $tree_db_id;          # integer ID of the tree in the database
     my $node_db_id;          # integer ID of a node in the database
     my $edge_db_id;          # integer ID of an edge in the database
 
@@ -318,11 +231,13 @@ while( $tree = $tree_in->next_tree ) {
     # to the $tree_name variable
     if ($tree->id) {
 	#print $tree->id."\n";
-    } elsif ($tree_name){
+    } 
+    elsif ($tree_name){
 	$tree->id($tree_name);
 	print "\tNo tree id was given.\n";
 	print "\tTree name set to: ".$tree->id."\n";
-    } else {
+    } 
+    else {
 	print "\a"; # Sound alarm
 	print "\nERROR: A tree name must be part of the input file or".
 	    " entered at the command line using the --tree option.\n".
@@ -427,11 +342,6 @@ while( $tree = $tree_in->next_tree ) {
 			" VALUES (?,?)";
 		    my $edge_sth = &prepare_sth($dbh,$statement);
 		    
-# The following is backwards 06/20/2007
-#		    execute_sth($edge_sth, 
-#				$ind_node->id, 
-#				$anc->id);
-
 		    execute_sth($edge_sth,
 				$anc->id,
 				$ind_node->id);
@@ -445,6 +355,7 @@ while( $tree = $tree_in->next_tree ) {
 		    print "-->";
 		    print $ind_node->id;
 		    print "\n";
+
 		} # End of if ancestor has id 
 	    } # End of if the node has an ancestor
 	} # End of if node has id
@@ -469,7 +380,8 @@ while( $tree = $tree_in->next_tree ) {
 	    " WHERE tree_id = ".$tree_db_id;
 	$sth = prepare_sth($dbh,$statement);
 	execute_sth($sth);
-    } else {
+    } 
+    else {
 	print "The tree is not rooted.\n";
 	
 	# QUESTION: WHAT TO ENTER FOR ROOT ID FOR AN UNROOTED TREE
@@ -493,7 +405,7 @@ while( $tree = $tree_in->next_tree ) {
 
 # End of program
 $dbh->disconnect();
-print "\n$0 has finished.\n";
+print "\n$0 has finished.\n" if $verbose;
 exit;
 
 #-----------------------------------------------------------+
@@ -624,7 +536,8 @@ sub last_insert_id {
     #my $driver = $dbh->get_info(SQL_DBMS_NAME);
     if (lc($driver) eq 'mysql') {
 	return $dbh->{'mysql_insertid'};
-    } elsif ((lc($driver) eq 'pg') || ($driver eq 'PostgreSQL')) {
+    } 
+    elsif ((lc($driver) eq 'pg') || ($driver eq 'PostgreSQL')) {
 	my $sql = "SELECT currval('${table_name}_pk_seq')";
 	my $stmt = $dbh->prepare_cached($sql);
 	my $rv = $stmt->execute;
@@ -632,7 +545,8 @@ sub last_insert_id {
 	my $row = $stmt->fetchrow_arrayref;
 	$stmt->finish;
 	return $row->[0];
-    } else {
+    } 
+    else {
 	die "don't know what to do with driver $driver\n";
     }
 } # End of last_insert_id subfunction
@@ -657,9 +571,10 @@ sub print_help {
     my ($opt) = @_;
 
     my $usage = "USAGE:\n". 
-	"  phyopt.pl -i InFile -o OutFile";
+	"  phyopt.pl -i infile --dsn DSNString";
     my $args = "REQUIRED ARGUMENTS:\n".
 	"  --infile       # File to import to the database.\n".
+	"  --dsn          # DSN string for connecting to db\n".
 	"\n".
 	"OPTIONS:\n".
 	"  --dbname       # Name of the database to connect to\n".
@@ -667,11 +582,12 @@ sub print_help {
 	"  --driver       # Driver for connecting to the database\n".
 	"  --dbuser       # Name to log on to the database with\n".
 	"  --dbpass       # Password to log on to the database with\n".
-	"  --tree         # Name of the tree to optimize\n".
+	"  --tree         # Name of the tree to import\n".
+	"BOOLEANS:\n".
 	"  --version      # Show the program version\n".     
 	"  --usage        # Show program usage\n".
 	"  --help         # Show this help message\n".
-	"  --man          # Open full program manual\n".
+	"  --man          # View the full program manual\n".
 	"  --verbose      # Run the program with maximum output\n". 
 	"  --quiet        # Run program with minimal output\n";
 	
@@ -685,52 +601,315 @@ sub print_help {
     
     exit;
 }
+ 
 
+=head1 NAME 
 
+phyimport.pl - Import phylogenetic trees from common file formats
+
+=head1 VERSION
+
+This documentation refers to phyimport version 1.0.
+
+=head1 SYNOPSIS
+
+  USAGE: phyimport.pl -d 'DBI:mysql:database=biosql;host=localhost' 
+                      -u UserName -p dbPass -i InFilePath -f InFileFormat 
+
+    REQUIRED ARGUMENTS:
+        --dsn        # The DSN string for the DB connection
+        --dbuser     # User name to connect with
+        --dbpass     # User password to connect with
+        --infile     # Full path to the tree file to import to the db
+        --format     # "newick", "nexus" (default "newick")
+    ALTERNATIVE TO --dsn:
+        --driver     # DB Driver "mysql", "Pg", "Oracle" 
+        --dbname     # Name of database to use
+        --host       # Host to connect with (ie. localhost)
+    ADDITIONAL OPTIONS:
+        --tree       # Tree name to use
+        --quiet      # Run the program in quiet mode.
+	--verbose    # Run the program in verbose mode.
+    ADDITIONAL INFORMATION:
+        --version    # Show the program version     
+	--usage      # Show program usage
+        --help       # Print short help message
+	--man        # Open full program manual
+
+=head1 DESCRIPTION
+
+Import tree files files from text common text files into the PhyloDB.
+
+=head1 COMMAND LINE ARGUMENTS
+
+=head2 Required Arguments
+
+=over
+
+=item -d, --dsn
+
+The DSN of the database to connect to; default is the value in the
+environment variable DBI_DSN. If DBI_DSN has not been defined and
+the string is not passed to the command line, the dsn will be 
+constructed from --driver, --dbname, --host
+
+DSN must be in the form:
+
+DBI:mysql:database=biosql;host=localhost
+
+=item -u, --dbuser
+
+The user name to connect with; default is the value in the environment
+variable DBI_USER.
+
+This user must have permission to create databases.
+
+=item -p, --dbpass
+
+The password to connect with; default is the value in the environment
+variable DBI_PASSWORD. If this is not provided at the command line
+the user is prompted.
+
+=item -i, --infile
+
+Path to the infile to import to the database
+
+=item -f, --format
+
+Format of the input file. Accepted file format options are: 
+
+nexus (C<-f nex>) - L<http://www.bioperl.org/wiki/NEXUS_tree_format>
+
+newick (C<-f newick>) - L<http://www.bioperl.org/wiki/Newick_tree_format>
+
+nhx (C<-f nhx>) - L<http://www.bioperl.org/wiki/New_Hampshire_extended_tree_format>
+
+lintree (C<-f lintree>) -L<http://www.bioperl.org/wiki/Lintree_tree_format>
+
+=back
+
+=head2 Alternative to --dsn
+
+An alternative to passing the full dsn at the command line is to
+provide the components separately.
+
+=over 2
+
+=item --host
+
+The database host to connect to; default is localhost.
+
+=item --dbname
+
+The database name to connect to; default is biosql.
+
+=item --driver
+
+The database driver to connect with; default is mysql.
+Options other then mysql are currently not supported.
+
+=back
+
+=head2 Additional Options
+
+=over 2
+
+=item --tree
+
+The name of the tree that will be imported. 
+
+=item -q, --quiet
+
+Run the program in quiet mode. No output will be printed to STDOUT
+and the user will not be prompted for intput. B<CURRENTLY NOT IMPLEMENTED.>
+
+=item --verbose
+
+Execute the program in verbose mode.
+
+=back
+
+=head2 Additional Information
+
+=over 2
+
+=item --version
+
+Show the program version.   
+
+=item --usage      
+
+Show program usage statement.
+
+=item --help
+
+Show a short help message.
+
+=item --man
+
+Show the full program manual.
+
+=back
+
+=head1 EXAMPLES
+
+B<Import single tree nexus format>
+
+The following example would import the tree stored as MyTree.nex with
+the name BigTree.
+
+    phyimport -d 'DBI:mysql:database=biosql;host=localhost'
+              -u name -p password -t BigTree -i MyTree.nex
+              -f nex
+
+=head1 DIAGNOSTICS
+
+The error messages below are followed by descriptions of the error
+and possible solutions.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Many of the options passed at the command line can be set as 
+options in the user's environment. 
+
+=over 2
+
+=item DBI_USER
+
+User name to connect to the database.
+
+=item DBI_PASSWORD
+
+Password for the database connection
+
+=item DBI_DSN
+
+DSN for database connection.
+
+=back
+
+For example in the bash shell this would be done be editing your .bashrc file
+to contain:
+
+    export DBI_USER=yourname
+    export DBI_PASS=yourpassword
+    export DBI_DSN='DBI:mysql:database=biosql;host-localhost'
+
+When these are present in the environment, you can initialize a database
+with the above variables by simply typing phyinit.pl at the command line.
+
+=head1 DEPENDENCIES
+
+The phyimport.pl program is dependent on the following PERL modules:
+
+=over2
+
+=item DBI - L<http://dbi.perl.org>
+
+The PERL Database Interface (DBI) module allows for connections 
+to multiple databases.
+
+=item DBD:MySQL - 
+L<http://search.cpan.org/~capttofu/DBD-mysql-4.005/lib/DBD/mysql.pm>
+
+MySQL database driver for DBI module.
+
+=item DBD:Pg -
+L<http://search.cpan.org/~rudy/DBD-Pg-1.32/Pg.pm>
+
+PostgreSQL database driver for the DBI module.
+
+=item Getopt::Long - L<http://perldoc.perl.org/Getopt/Long.html>
+
+The Getopt module allows for the passing of command line options
+to perl scripts.
+
+=item Bio::Tree - L<http://www.bioperl.org>
+
+The Bio::Tree module is part of the bioperl package.
+
+=back
+
+A RDBMS is also required. This can be one of:
+
+=over 2
+
+=item MySQL - L<http://www.mysql.com>
+
+=item PostgreSQL - L<http://www.postgresql.org>
+
+=back
+
+=head1 BUGS AND LIMITATIONS
+
+Known limitations:
+
+=over2
+
+=item *
+Currently only stable with the MySQL Database driver.
+
+=item *
+DSN string must currently be in the form:
+DBI:mysql:database=biosql;host=localhost
+
+=back
+
+Please report additional problems to 
+James Estill E<lt>JamesEstill at gmail.comE<gt>
+
+=head1 SEE ALSO
+
+The program phyinit.pl is a component of a package of comand line programs
+for PhyloDB management. Additional programs include:
+
+=over
+
+=item phyinit.pl
+
+Initialize a PhyloDB database.
+
+=item phyexport.pl
+
+Export tree data in PhyloDB to common file formats.
+
+=item phyopt.pl
+
+Compute optimization values for a PhyloDB database.
+
+=item phyqry.pl
+
+Return a standard report of information for a given tree.
+
+=item phymod.pl
+
+Modify an existing phylogenetic database by deleting, adding or
+copying branches.
+
+=back
+
+=head1 LICENSE
+
+This program may be used, distributed or modified under the same
+terms as Perl itself. Please consult the Perl Artistic License
+(http://www.perl.com/pub/a/language/misc/Artistic.html) for the
+terms under which you may use, modify, or distribute this script.
+
+THIS SOFTWARE COMES AS IS, WITHOUT ANY EXPRESS OR IMPLIED
+WARRANTY. USE AT YOUR OWN RISK.
+
+=head1 AUTHORS
+
+James C. Estill E<lt>JamesEstill at gmail.comE<gt>
+
+Hilmar Lapp E<lt>hlapp at gmx.netE<gt>
+
+William Piel E<lt>william.piel at yale.eduE<gt>
 
 =head1 HISTORY
 
 Started: 05/30/2007
 
-Updated: 07/20/2007
+Updated: 08/17/2007
 
 =cut
-
-#-----------------------------------------------------------+
-# HISTORY                                                   |
-#-----------------------------------------------------------+
-# 06/01/2007 - JCE
-# - Program started
-# 06/05/2007 - JCE
-# - Updated POD documentation 
-# 06/07/2007 - JCE
-# -Adding the ability to read in a tree using Bio::TreeIO;
-#  and Bio::Tree::TreeI;
-# - Get nodes from tree object
-# - Get edges from tree object
-# - Added ConnnectToDb subfunction
-# - Added connect_to_mysql subfunction
-# - Added exit when no tree name is available from command
-#   line or from input file.
-# - Added prepare_sth subfucntion
-# - Added execute_sth subfunction
-# 06/08/2007 - JCE
-# - Added last_insert_id subfunction
-# - Added connect_to_pg subfunction
-# - Modified execute_sth to disconnect the db handle 
-#   before die
-# - Added code to insert nodes in the database
-# - Added code to insert edges in the database
-# - Added in_format_check subfunction
-# 06/15/2007 - JCE
-# - Checked code with new installation of bioperl
-#   nexus works
-# - Added EndWork subfunction from load_itis_taxonomy.pl 
-# - Changed subfunctions to read intput from @_ instead of $_[0];
-# - Changed all variable names to lowercase with underscores
-# - Changed all subfunction names to lowercase with underscores
-# 06/18/2007
-# - Trying to get parse_dsn to work. Moving the subfunction from
-#   the DB module
-# - Changed name to lowercase phyimport.pl
-# - Add root node id to tree
