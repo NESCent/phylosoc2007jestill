@@ -1,11 +1,4 @@
 #!/usr/bin/perl -w
-#/////////////////////////////////////////////////////////////
-#////////////////////////////////////////////////////////////
-#
-# WARNING: SCRIPT UNDER CURRENT DEVEOPMENT
-#
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 #-----------------------------------------------------------+
 #                                                           |
 # phyexport.pl - Export phylodb data to common file formats |
@@ -15,131 +8,27 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/18/2007                                       |
-# UPDATED: 07/20/2007                                       |
+# UPDATED: 08/19/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Export data from the PhyloDb database to common file     |
 #  file formats.                                            |
 #                                                           |
-# LICENSE:                                                  |
-#  GNU Lesser Public License                                |
-#  http://www.gnu.org/licenses/lgpl.html                    |  
-#                                                           |
 #-----------------------------------------------------------+
 #
 # TO DO:
-# - Update POD documentation
 # - Allow for using a root_name to name all of the output trees
 #   or use the tree_name from the database as the output name
 #   when exporting trees.
-#
-# NOTE:
-# - This will initially only support export of a single tree.
+# - Fix exit handler
+# - Add support for subtree export
+# - Fix dsn to match the way that Hilmar is doing it
+# - Add diagnostics information
+# - Use hash for in_format_check
+# - Find a better way to use the tree object without making it a
+#   package level variable
  
-=head1 NAME 
-
-phyexport.pl - Export phylodb data to common file formats
-
-=head1 SYNOPSIS
-
-  Usage: phyexport.pl
-        --dsn         # The DSN string the database to connect to
-                      # Must conform to:
-                      # 'DBI:mysql:database=biosql;host=localhost' 
-        --outfile     # Full path to output file that will be created.
-        --dbuser      # User name to connect with
-        --dbpass      # Password to connect with
-        --dbname      # Name of database to use
-        --driver      # "mysql", "Pg", "Oracle" (default "mysql")
-        --host        # optional: host to connect with
-        --format      # "newick", "nexus" (default "newick")
-        --tree        # Name of the tree to export
-        --parent-node # Node to serve as root for a subtree export
-        --help        # Print this help message
-        --quiet       # Run the program in quiet mode.
-        --db-node-id  # Preserve DB node names in export
-
-=head1 DESCRIPTION
-
-Export a phylodb Tree to a specified output format.
-
-=head1 ARGUMENTS
-
-=over
-
-=item -o, --outfile
-
-The full path of the output file that will be created.
-
-=item -f, --format
-    
-    File format to export the tree to [ie NEXUS].
-    
-=item -d, --dsn
-    
-the DSN of the database to connect to; default is the value in the
-environment variable DBI_DSN. If DBI_DSN has not been defined and
-the string is not passed to the command line, the dsn will be 
-constructed from --driver, --dbname, --host
-
-Example: DBI:mysql:database=biosql;host=localhost
-
-=item -u, --dbuser
-
-The user name to connect with; default is the value in the environment
-variable DBI_USER.
-
-This user must have permission to add data to tables.
-
-=item -p, --dbpass
-
-password to connect with; default is the value in the environment
-variable DBI_PASSWORD. If this is not provided at the command line
-the user is prompted.
-
-=item --host
-
-The database host to connect to; default is localhost.
-
-=item --dbname
-
-The database name to connect to; default is biosql.
-
-=item --driver
-
-The database driver to connect with; default is mysql.
-Options other then mysql are currently not supported.
-
-=item --parent-node
-
-Node id to serve as the root for a subtree export.
-    
-=item -h, --help
-
-Print the help message.
-
-=item -q, --quiet
-
-Print the program in quiet mode. No output will be printed to STDOUT
-and the user will not be prompted for intput.
-
-=item --db-node-id
-
-Preserve database node ids when exporting the tree. For nodes that
-have existing labels in the label field, the node_id from the database
-will be indicated in parentesis.
-
-=back
-
-=head1 AUTHORS
-
-James C. Estill E<lt>JamesEstill at gmail.comE<gt>
-
-=cut
-
-print "Staring $0 ..\n";
-
-#Package this as phytools for now
+#Package this as PhyloDB for now
 package PhyloDB;
 
 #-----------------------------+
@@ -156,7 +45,7 @@ use Bio::Tree::NodeI;
 #-----------------------------+
 # VARIABLE SCOPE              |
 #-----------------------------+
-my $ver = "Dev: 07/20/2007";   # Program version
+my $VERSION = "1.0";   # Program version
 
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
@@ -249,7 +138,7 @@ if ($show_help || (!$ok) ) {
 }
 
 if ($show_version) {
-    print "\n$0:\nVersion: $ver\n\n";
+    print "\n$0:\nVersion: $VERSION\n\n";
     exit;
 }
 
@@ -260,7 +149,6 @@ if ($show_man) {
 }
 
 print "Staring $0 ..\n" if $verbose; 
-
 
 # A full dsn can be passed at the command line or components
 # can be put together
@@ -514,7 +402,8 @@ foreach my $ind_tree (@trees) {
 	    
 	    if ($node_label) {
 		$ind_node->id($node_label);
-	    } else {
+	    } 
+	    else {
 		$ind_node->id('');
 	    }
 
@@ -537,7 +426,6 @@ foreach my $ind_tree (@trees) {
     my $treeout_here = Bio::TreeIO->new( -format => $format );
     
     $treeout_here->write_tree($tree); 
-
 
     $treeio->write_tree($tree);
 
@@ -564,8 +452,6 @@ exit;
 #-----------------------------------------------------------+
 # SUBFUNCTIONS                                              |
 #-----------------------------------------------------------+
-
-#sub fetch_
 
 sub load_tree_nodes {
 
@@ -809,55 +695,319 @@ sub print_help {
     exit;
 }
 
+=cut
+
+=head1 NAME 
+
+phyexport.pl - Export PhyloDB data to common tree file formats.
+
+=head1 VERSION
+
+This documentation refers to phyexport version 1.0.
+
+=head1 SYNOPSIS
+
+  USAGE: phyexport.pl
+
+    REQUIRED ARGUMENTS:
+        --dsn         # The DSN string the database to connect to
+                      # Must conform to:
+                      # 'DBI:mysql:database=biosql;host=localhost' 
+        --dbuser      # User name to connect with
+        --dbpass      # Password to connect with
+        --outfile     # Full path to output file that will be created.
+    ALTERNATIVE TO --dsn:
+        --driver     # DB Driver "mysql", "Pg" "Oracle" 
+        --dbname     # Name of database to use
+        --host       # Host to connect with (ie. localhost)
+    ADDITIONAL OPTIONS:
+        --format      # "newick", "nexus" (default "newick")
+        --tree        # Name of the tree to export
+        --parent-node # Node to serve as root for a subtree export
+        --help        # Print this help message
+        --quiet       # Run the program in quiet mode.
+        --db-node-id  # Preserve DB node names in export
+
+=head1 DESCRIPTION
+
+Export a tree stored in a PhyloDB database to a specified output format. 
+Currently nexus, newick, lintree and New Hampshire Extended formats are 
+supported. However; only the basic tree is currently supported. Branch
+data are not exported.
+
+=head1 COMMAND LINE ARGUMENTS
+
+=head2 Required Arguments
+
+=over
+
+=item -d, --dsn
+
+The DSN of the database to connect to; default is the value in the
+environment variable DBI_DSN. If DBI_DSN has not been defined and
+the string is not passed to the command line, the dsn will be 
+constructed from --driver, --dbname, --host
+
+DSN must be in the form:
+
+DBI:mysql:database=biosql;host=localhost
+
+=item -u, --dbuser
+
+The user name to connect with; default is the value in the environment
+variable DBI_USER.
+
+This user must have permission to create databases.
+
+=item -p, --dbpass
+
+The password to connect with; default is the value in the environment
+variable DBI_PASSWORD. If this is not provided at the command line
+the user is prompted.
+
+=item -o, --outfile
+
+The full path of the output file that will be created.
+
+=back
+
+=head2 Alternative to --dsn
+
+An alternative to passing the full dsn at the command line is to
+provide the components separately.
+
+=over 2
+
+=item --host
+
+The database host to connect to; default is localhost.
+
+=item --dbname
+
+The database name to connect to; default is biosql.
+
+=item --driver
+
+The database driver to connect with; default is mysql.
+Options other then mysql are currently not supported.
+
+=back
+
+=head2 Additional Options
+
+=over 2
+
+=item -f, --format
+
+Format of the export file. Accepted file format options are: 
+
+nexus (C<-f nex>) - L<http://www.bioperl.org/wiki/NEXUS_tree_format>
+
+newick (C<-f newick>) - L<http://www.bioperl.org/wiki/Newick_tree_format>
+
+nhx (C<-f nhx>) - 
+L<http://www.bioperl.org/wiki/New_Hampshire_extended_tree_format>
+
+lintree (C<-f lintree>) -L<http://www.bioperl.org/wiki/Lintree_tree_format>
+
+=item --parent-node
+
+Node id to serve as the root for a subtree export. B<Currenly not supported>
+
+=item --db-node-id
+
+Preserve database node ids when exporting the tree. For nodes that
+have existing labels in the label field, the node_id from the database
+will be indicated in parentesis.
+
+=item -h, --help
+
+Print the help message.
+
+=item -q, --quiet
+
+Print the program in quiet mode. No output will be printed to STDOUT
+and the user will not be prompted for intput.
+
+=back
+
+=head2 Additional Information
+
+=over 2
+
+=item --version
+
+Show the program version.   
+
+=item --usage      
+
+Show program usage statement.
+
+=item --help
+
+Show a short help message.
+
+=item --man
+
+Show the full program manual.
+
+=back
+
+=head1 EXAMPLES
+
+B<Export a single tree>
+
+The following example would export the single tree named Cornus in the biosql
+database to the nexus formatted outfile cornus.nex.
+
+    phyexport.pl -d 'DBI:mysql:database=biosql;host=localhost'
+                 -u UserName -p password -t cornus -o cornus.nex
+                 -f nex
+
+If you have identified the dsn, username, and password in your environment
+this is simplified to.
+
+    phyexport.pl -t cornus -o cornus.nex -f nex
+
+Exporting the same tree in newick format would be
+
+    phyexport.pl -t cornus -o cornus.newick -f new
+
+Exporting in the New Hampshire extended foramt
+
+    phyexport.pl -t cornus -o cornus.nhx -f nhx
+
+=head1 DIAGNOSTICS
+
+The known error messages below are followed by possible descriptions of
+the error and possible solutions.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Many of the options passed at the command line can be set as 
+options in the user's environment. 
+
+=over 2
+
+=item DBI_USER
+
+User name to connect to the database.
+
+=item DBI_PASSWORD
+
+Password for the database connection
+
+=item DBI_DSN
+
+DSN for database connection.
+
+=back
+
+For example in the bash shell this would be done be editing your .bashrc file
+to contain:
+
+    export DBI_USER=yourname
+    export DBI_PASS=yourpassword
+    export DBI_DSN='DBI:mysql:database=biosql;host-localhost'
+
+=head1 DEPENDENCIES
+
+The phyinit program is dependent on the following PERL modules:
+
+=over 2
+
+=item DBI - L<http://dbi.perl.org>
+
+The PERL Database Interface (DBI) module allows for connections 
+to multiple databases.
+
+=item DBD:MySQL - 
+L<http://search.cpan.org/~capttofu/DBD-mysql-4.005/lib/DBD/mysql.pm>
+
+MySQL database driver for DBI module.
+
+=item DBD:Pg -
+L<http://search.cpan.org/~rudy/DBD-Pg-1.32/Pg.pm>
+
+PostgreSQL database driver for the DBI module.
+
+=item Getopt::Long - L<http://perldoc.perl.org/Getopt/Long.html>
+
+The Getopt module allows for the passing of command line options
+to perl scripts.
+
+=back
+
+=head1 BUGS AND LIMITATIONS
+
+Known Limitations:
+
+=over 2
+
+=item *
+Currently only stable with the MySQL Database driver.
+
+=item *
+DSN string must currently be in the form:
+DBI:mysql:database=biosql;host=localhost
+
+=back
+
+Please report additional problems to 
+James Estill E<lt>JamesEstill at gmail.comE<gt>
+
+=head1 SEE ALSO
+
+The program phyinit.pl is a component of a package of comand line programs
+for PhyloDB management. Additional programs include:
+
+=over
+
+=item phyinit.pl
+
+Initialize a PhyloDB database.
+
+=item phyimport.pl
+
+Import common phylogenetic file formats.
+
+=item phyopt.pl
+
+Compute optimization values for a PhyloDB database.
+
+=item phyqry.pl
+
+Return a standard report of information for a given tree.
+
+=item phymod.pl
+
+Modify an existing phylogenetic database by deleting, adding or
+copying branches.
+
+=back
+
+=head1 LICENSE
+
+This program may be used, distributed or modified under the same
+terms as Perl itself. Please consult the Perl Artistic License
+(http://www.perl.com/pub/a/language/misc/Artistic.html) for the
+terms under which you may use, modify, or distribute this script.
+
+THIS SOFTWARE COMES AS IS, WITHOUT ANY EXPRESS OR IMPLIED
+WARRANTY. USE AT YOUR OWN RISK.
+
+=head1 AUTHORS
+
+James C. Estill E<lt>JamesEstill at gmail.comE<gt>
+
+Hilmar Lapp E<lt>hlapp at gmx.netE<gt>
+
+William Piel E<lt>william.piel at yale.eduE<gt>
+
 =head1 HISTORY
 
 Started: 06/18/2007
 
-Updated: 07/20/2007
+Updated: 08/19/2007
 
 =cut
-
-#-----------------------------------------------------------+
-# HISTORY                                                   |
-#-----------------------------------------------------------+
-# 06/18/2007 - JCE
-# - Started program, copied subfunctions from phyimport.pl
-# - Added print_trees subfunction from print-trees.pl
-# - Added print_tree_nodes subfunction from print-trees.pl
-# 
-# 06/19/2007 - JCE
-# - added the create a new tree object and tested adding
-#   nodes to the tree
-# - Moving the subfunction for each tree to the main body
-#   of the code
-#
-# 06/21/2007 - JCE
-# - Working more with the Bio::Tree object
-#
-# 06/22/2007 - JCE
-# - Finally have a working base code to expand from
-# - Can export file to Bio::Tree supported formats
-# - Added bootstrap values to node objects
-# - Added edge lengths to node objects
-# - Added the original node id to the node object and 
-#   overwrite the id assigned by the database
-#   It may make sense to leave this if the user wants
-#   to pick branches to expand.
-#
-# 07/06/2007 - JCE
-# - Working on only exporing a subtree based on a single node
-# - This uses the parent_node variable
-#
-# 07/10/2007 - JCE
-# - Fixed problem exporting tree to file, filehandle was 
-#   not being passed to the BioTree object
-#
-# 07/11/2007 - JCE
-# - Added --db-node-id flag to include the database node id
-#   in the exported tree, the default is to rever to the node
-#   labels used in the original tree as stores in node.label
-# - Added --parent-node to serve as the base node to export
-#   a subtre
-#
-# 07/20/2007 - JCE
-# - Adding usage, help, man, and version to command line opts
