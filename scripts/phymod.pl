@@ -1,15 +1,7 @@
 #!/usr/bin/perl -w
-#/////////////////////////////////////////////////////////////
-#////////////////////////////////////////////////////////////
-#
-# WARNING: SCRIPT UNDER CURRENT DEVEOPMENT
-# WORKING ON DELETION OF NODE AND CHILDREN CURRENTLY
-#
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-#\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 #-----------------------------------------------------------+
 #                                                           |
-# phymod.pl - modify phylogenies in phyodb                  |
+# phymod.pl - modify trees in PhyloDB                       |
 #                                                           |
 #-----------------------------------------------------------+
 #                                                           |
@@ -27,116 +19,9 @@
 #  http://www.gnu.org/licenses/lgpl.html                    |  
 #                                                           |
 #-----------------------------------------------------------+
-# 
-#
 # TO DO:
 # - Update POD documentation
  
-=head1 NAME 
-
-phymod.pl - Modifiy trees in the PhyloDB database
-
-=head1 SYNOPSIS
-
-  Usage: phyexport.pl
-        --dsn        # The DSN string the database to connect to
-                     # Must conform to:
-                     # 'DBI:mysql:database=biosql;host=localhost' 
-        --outfile    # Full path to output file that will be created.
-        --dbuser     # User name to connect with
-        --dbpass     # Password to connect with
-        --dbname     # Name of database to use
-        --driver     # "mysql", "Pg", "Oracle" (default "mysql")
-        --host       # optional: host to connect with
-        --cut        # Node to cut
-        --copy       # Node to copy
-        --paste      # Node to paste
-        --help       # Print this help message
-        --quiet      # Run the program in quiet mode.
-        --format     # "newick", "nexus" (default "newick")
-        --tree       # Name of the tree to export
-
-=head1 DESCRIPTION
-
-Export a phylodb Tree to a specified output format.
-
-=head1 ARGUMENTS
-
-=over
-
-=item -o, --outfile
-
-The full path of the output file that will be created.
-
-=item -f, --format
-    
-    File format to export the tree to [ie NEXUS].
-    
-=item -d, --dsn
-    
-the DSN of the database to connect to; default is the value in the
-environment variable DBI_DSN. If DBI_DSN has not been defined and
-the string is not passed to the command line, the dsn will be 
-constructed from --driver, --dbname, --host
-
-Example: DBI:mysql:database=biosql;host=localhost
-
-=item -u, --dbuser
-
-The user name to connect with; default is the value in the environment
-variable DBI_USER.
-
-This user must have permission to add data to tables.
-
-=item -p, --dbpass
-
-password to connect with; default is the value in the environment
-variable DBI_PASSWORD. If this is not provided at the command line
-the user is prompted.
-
-=item --host
-
-The database host to connect to; default is localhost.
-
-=item --dbname
-
-The database name to connect to; default is biosql.
-
-=item --driver
-
-The database driver to connect with; default is mysql.
-Options other then mysql are currently not supported.
-
-=item -x, --cut-node
-
-The source node that will be cut from. When passed witout a paste
-the data will be deleted from the database.
-
-=item -c, --copy-node
-
-The source node that will be copied.
-
-=item -v, --paste-node
-
-Currently it is only possible to paste a node onto an existing node.
-    
-=item -h, --help
-
-Print the help message.
-
-=item -q, --quiet
-
-Print the program in quiet mode. No output will be printed to STDOUT
-and the user will not be prompted for intput.
-
-=back
-
-=head1 AUTHORS
-
-James C. Estill E<lt>JamesEstill at gmail.comE<gt>
-
-=cut
-
 print "Staring $0 ..\n";
 
 #Package this as phytools for now
@@ -1231,21 +1116,280 @@ sub print_help {
     exit;
 }
 
+=head1 NAME 
+
+phymod.pl - Modifiy trees in the PhyloDB database
+
+=head1 VERSION
+
+This documentation refers to phymod.pl version 1.0.
+
+=head1 SYNOPSIS
+
+  Usage: phyexport.pl
+        --dsn        # The DSN string the database to connect to
+                     # Must conform to:
+                     # 'DBI:mysql:database=biosql;host=localhost' 
+        --outfile    # Full path to output file that will be created.
+        --dbuser     # User name to connect with
+        --dbpass     # Password to connect with
+        --dbname     # Name of database to use
+        --driver     # "mysql", "Pg", "Oracle" (default "mysql")
+        --host       # optional: host to connect with
+        --cut        # Node to cut
+        --copy       # Node to copy
+        --paste      # Node to paste
+        --help       # Print this help message
+        --quiet      # Run the program in quiet mode.
+        --format     # "newick", "nexus" (default "newick")
+        --tree       # Name of the tree to export
+
+=head1 DESCRIPTION
+
+Export a phylodb Tree to a specified output format.
+
+=head1 COMMAND LINE ARGUMENTS
+
+=head2 Required Arguments
+
+=over 2
+
+=item -d, --dsn
+
+the DSN of the database to connect to; default is the value in the
+environment variable DBI_DSN. If DBI_DSN has not been defined and
+the string is not passed to the command line, the dsn will be 
+constructed from --driver, --dbname, --host
+
+Example: DBI:mysql:database=biosql;host=localhost
+
+=item -u, --dbuser
+
+The user name to connect with; default is the value in the environment
+variable DBI_USER.
+
+This user must have permission to add data to tables.
+
+=item -p, --dbpass
+
+password to connect with; default is the value in the environment
+variable DBI_PASSWORD. If this is not provided at the command line
+the user is prompted.
+
+=item -x, --cut-node
+
+The source node that will be cut from. When passed witout a paste
+the data will be deleted from the database.
+
+=item -c, --copy-node
+
+The source node that will be copied.
+
+=item -v, --paste-node
+
+Currently it is only possible to paste a node onto an existing node.
+
+=back
+
+=head2 Alternative to --dsn
+
+=over 2
+
+=item --host
+
+The database host to connect to; default is localhost.
+
+=item --dbname
+
+The database name to connect to; default is biosql.
+
+=item --driver
+
+The database driver to connect with; default is mysql.
+Options other then mysql are currently not supported.
+
+=back
+
+=head2 Additional Options
+
+=over 2
+
+=item -q, --quiet
+
+Print the program in quiet mode. No output will be printed to STDOUT
+and the user will not be prompted for intput.
+
+=back
+
+=head2 Additional Information
+
+=over
+
+=item --version
+
+Show the program version.   
+
+=item --usage      
+
+Show program usage statement.
+
+=item --help
+
+Show a short help message.
+
+=item --man
+
+Show the full program manual.
+
+=back
+
+=head1 EXAMPLES
+
+B<Cut branch from tree>
+
+The following command would remove the branch rooted at node 25 from the
+tree named cornus.
+
+    phymod.pl -t cornus -x 25
+
+=head1 DIAGNOSTICS
+
+Add diagnostics information here.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Many of the options passed at the command line can be set as 
+options in the user's environment. 
+
+=over 2
+
+=item DBI_USER
+
+User name to connect to the database.
+
+=item DBI_PASSWORD
+
+Password for the database connection
+
+=item DBI_DSN
+
+DSN for database connection.
+
+=back
+
+For example in the bash shell this would be done be editing your .bashrc file
+to contain:
+
+    export DBI_USER=yourname
+    export DBI_PASS=yourpassword
+    export DBI_DSN='DBI:mysql:database=biosql;host-localhost'
+
+=head1 DEPENDENCIES
+
+The phyinit program is dependent on the following PERL modules:
+
+=over 2
+
+=item DBI - L<http://dbi.perl.org>
+
+The PERL Database Interface (DBI) module allows for connections 
+to multiple databases.
+
+=item DBD:MySQL - 
+L<http://search.cpan.org/~capttofu/DBD-mysql-4.005/lib/DBD/mysql.pm>
+
+MySQL database driver for DBI module.
+
+=item DBD:Pg -
+L<http://search.cpan.org/~rudy/DBD-Pg-1.32/Pg.pm>
+
+PostgreSQL database driver for the DBI module.
+
+=item Getopt::Long - L<http://perldoc.perl.org/Getopt/Long.html>
+
+The Getopt module allows for the passing of command line options
+to perl scripts.
+
+=back
+
+A RDBMS is also required. This can be one of:
+
+=over 2
+
+=item MySQL - L<http://www.mysql.com>
+
+=item PostgreSQL - L<http://www.postgresql.org>
+
+=back
+
+
+=head1 BUGS AND LIMITATIONS
+
+Known Limitations:
+
+=over 2
+
+=item *
+Currently only stable with the MySQL Database driver.
+
+=item *
+DSN string must currently be in the form:
+DBI:mysql:database=biosql;host=localhost
+
+=back
+
+=head1 SEE ALSO
+
+The program phyinit.pl is a component of a package of comand line programs
+for PhyloDB management. Additional programs include:
+
+=over
+
+=item phyimport.pl
+
+Import common phylogenetic file formats.
+
+=item phyexport.pl
+
+Export tree data in PhyloDB to common file formats.
+
+=item phyopt.pl
+
+Compute optimization values for a PhyloDB database.
+
+=item phyqry.pl
+
+Return a standard report of information for a given tree.
+
+=item phymod.pl
+
+Modify an existing phylogenetic database by deleting, adding or
+copying branches.
+
+=back
+
+=head1 LICENSE
+
+This program may be used, distributed or modified under the same
+terms as Perl itself. Please consult the Perl Artistic License
+(http://www.perl.com/pub/a/language/misc/Artistic.html) for the
+terms under which you may use, modify, or distribute this script.
+
+THIS SOFTWARE COMES AS IS, WITHOUT ANY EXPRESS OR IMPLIED
+WARRANTY. USE AT YOUR OWN RISK.
+
+=head1 AUTHORS
+
+James C. Estill E<lt>JamesEstill at gmail.comE<gt>
+
+Hilmar Lapp E<lt>hlapp at gmx.netE<gt>
+
+William Piel E<lt>william.piel at yale.eduE<gt>
 
 =head1 HISTORY
 
 Started: 07/06/2007
 
-Updated: 07/20/2007
+Updated: 08/19/2007
 
 =cut
-
-#-----------------------------------------------------------+
-# HISTORY                                                   |
-#-----------------------------------------------------------+
-# 07/06/2007 - JCE
-# - Started program. Based on the phyexport template
-#
-# 07/09/2007 - JCE
-# - Finished count_deleted_data subfunction
-# - Added user feedback subfunction
