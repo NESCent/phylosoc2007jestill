@@ -8,10 +8,11 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 07/04/2007                                       |
-# UPDATED: 07/20/2007                                       |
+# UPDATED: 08/19/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
-#  Optimize a PhyloDB. Add left and right index values.     |
+#  Optimize a PhyloDB. Add left and right index values and  |
+#  determine transitive closure.                            |
 #                                                           |
 # LICENSE:                                                  |
 #  GNU Lesser Public License                                |
@@ -20,106 +21,15 @@
 #-----------------------------------------------------------+
 #
 # TO DO:
-# - Update POD documentation
 # - The internal nodes used by TreeI will not be the same
 #   as the nodes used in the database so the DB ID will
 #   need to be fetched when adding edges to the database.
 # - Add taxa to the biosql database and add taxa information
 #   from the tree to the PhyloDB node table. This would required
 #   using the taxon_id field in the node table
-# - Add edge_attribute data when available
+# - Add error information to the diagnostics section of the
+#   documentation
  
-=head1 NAME 
-
-phyopt.pl - Optimize trees in a PhyloDB database
-
-=head1 SYNOPSIS
-
-  Usage: PhyImport.pl
-        --dsn        # The DSN string the database to connect to
-                     # Must conform to:
-                     # 'DBI:mysql:database=biosql;host=localhost' 
-        --dbuser     # User name to connect with
-        --dbpass     # Password to connect with
-        --dbname     # Name of database to use
-        --driver     # "mysql", "Pg", "Oracle" (default "mysql")
-        --host       # optional: host to connect with
-        --help       # Print this help message
-        --quiet      # Run the program in quiet mode.
-        --format     # "newick", "nexus" (default "newick")
-        --tree       # Name of the tree to optimize.
-                     # Otherwise the entire db is optimized.
-
-=head1 DESCRIPTION
-
-Optimize trees in a PhyloDB database.
-
-=head1 ARGUMENTS
-
-=over
-
-=item -d, --dsn
-
-the DSN of the database to connect to; default is the value in the
-environment variable DBI_DSN. If DBI_DSN has not been defined and
-the string is not passed to the command line, the dsn will be 
-constructed from --driver, --dbname, --host
-
-Example: DBI:mysql:database=biosql;host=localhost
-
-=item -u, --dbuser
-
-The user name to connect with; default is the value in the environment
-variable DBI_USER.
-
-This user must have permission to add data to tables.
-
-=item -p, --dbpass
-
-password to connect with; default is the value in the environment
-variable DBI_PASSWORD. If this is not provided at the command line
-the user is prompted.
-
-=item --host
-
-The database host to connect to; default is localhost.
-
-=item --dbname
-
-The database name to connect to; default is biosql.
-
-=item --driver
-
-The database driver to connect with; default is mysql.
-Options other then mysql are currently not supported.
-    
-=item -h, --help
-
-Print the help message.
-
-=item -q, --quiet
-
-Print the program in quiet mode. No output will be printed to STDOUT
-and the user will not be prompted for intput.
-
-=item -t, --tree
-
-Name of the tree that will be optimized.
-
-=back
-
-=head1 AUTHORS
-
-Hilmar Lapp <hlapp at gmx.net>
-
-James C. Estill E<lt>JamesEstill at gmail.comE<gt>
-
-=head1 Contributors
-
-William Piel <william.piel at yale.edu>
-
-=cut
-
 #-----------------------------+
 # INCLUDES                    |
 #-----------------------------+
@@ -131,7 +41,7 @@ use constant LOG_CHUNK => 10000;
 #-----------------------------+
 # VARIABLE SCOPE              |
 #-----------------------------+
-my $ver = "Dev 07/20/2007";    #
+my $VERSION = "1.0";    #
 
 my $usrname = $ENV{DBI_USER};  # User name to connect to database
 my $pass = $ENV{DBI_PASSWORD}; # Password to connect to database
@@ -145,7 +55,7 @@ my $sqldir;                    # Directory that contains the sql to run
                                # to create the tables.
 my $quiet = 0;                 # Run the program in quiet mode
                                # will not prompt for command line options
-my $tree_name;                  # The name of the tree
+my $tree_name;                 # The name of the tree
                                # For files with multiple trees, this may
                                # be used as a base name to name the trees with
 my $statement;                 # Var to hold SQL statement string
@@ -164,8 +74,6 @@ my $show_version = 0;          # Show the program version
 #-----------------------------+
 my $ok = GetOptions("d|dsn=s"    => \$dsn,
                     "u|dbuser=s" => \$usrname,
-#                    "i|infile=s" => \$infile,
-#                    "f|format=s" => \$format,
                     "p|dbpass=s" => \$pass,
 		    "s|sqldir=s" => \$sqldir,
 		    "driver=s"   => \$driver,
@@ -193,7 +101,7 @@ if ($show_help || (!$ok) ) {
 }
 
 if ($show_version) {
-    print "\n$0:\nVersion: $ver\n\n";
+    print "\n$0:\nVersion: $VERSION\n\n";
     exit;
 }
 
@@ -557,9 +465,12 @@ sub print_help {
     my ($opt) = @_;
 
     my $usage = "USAGE:\n". 
-	"  phyopt.pl -i InFile -o OutFile";
+	"  phyopt.pl -d 'DBI:mysql:database=biosql;host=localhost'\n". 
+	"  -u UserName -p dbPass -t MyTree\n";
     my $args = "REQUIRED ARGUMENTS:\n".
-	"  --dsn          # Not really. just here for now.\n".
+        "  --dsn        # The DSN string the database to connect to\n".
+        "               # Must conform to:\n".
+        "               # 'DBI:mysql:database=biosql;host=localhost'\n".
 	"\n".
 	"OPTIONS:\n".
 	"  --dbname       # Name of the database to connect to\n".
@@ -586,31 +497,310 @@ sub print_help {
     exit;
 }
 
+=head1 NAME 
+
+phyopt.pl - Optimize trees in a PhyloDB database
+
+=head1 VERSION
+
+This documentation refers to phyopt.pl version 1.0.
+
+=head1 SYNOPSIS
+
+  USAGE: phyopt.pl -d 'DBI:mysql:database=biosql;host=localhost' 
+                   -u UserName -p dbPass -t MyTree
+
+    REQUIRED ARGUMENTS:
+        --dsn        # The DSN string the database to connect to
+                     # Must conform to:
+                     # 'DBI:mysql:database=biosql;host=localhost' 
+        --dbuser     # User name to connect with
+        --dbpass     # Password to connect with
+    ALTERNATIVE TO --dsn:
+        --driver     # "mysql", "Pg", "Oracle" (default "mysql")
+        --dbname     # Name of database to use
+        --host       # optional: host to connect with
+    ADDITIONAL OPTIONS:
+        --tree       # Name of the tree to optimize.
+                     # Otherwise the entire db is optimized.
+        --quiet      # Run the program in quiet mode.
+        --verbose    # Run the program in verbose mode.
+    ADDITIONAL INFORMATION:
+	--version    # Show the program version     
+	--usage      # Show program usage
+        --help       # Print short help message
+	--man        # Open full program manual
+
+=head1 DESCRIPTION
+
+The phyopt program will optimize trees in a PhyloDB database by computing
+transitive closure paths as well as the left and right index values for
+the nested set indexes.
+
+=head1 COMMAND LINE ARGUMENTS
+
+=head2 Required Arguments
+
+=over
+
+=item -d, --dsn
+
+The DSN of the database to connect to; default is the value in the
+environment variable DBI_DSN. If DBI_DSN has not been defined and
+the string is not passed to the command line, the dsn will be 
+constructed from --driver, --dbname, --host
+
+DSN must be in the form:
+
+DBI:mysql:database=biosql;host=localhost
+
+=item -u, --dbuser
+
+The user name to connect with; default is the value in the environment
+variable DBI_USER.
+
+This user must have permission to create databases.
+
+=item -p, --dbpass
+
+The password to connect with; default is the value in the environment
+variable DBI_PASSWORD. If this is not provided at the command line
+the user is prompted.
+
+=back
+
+=head2 Alternative to --dsn
+
+An alternative to passing the full dsn at the command line is to
+provide the components separately.
+
+=over 2
+
+=item --host
+
+The database host to connect to; default is localhost.
+
+=item --dbname
+
+The database name to connect to; default is biosql.
+
+=item --driver
+
+The database driver to connect with; default is mysql.
+Options other then mysql are currently not supported.
+
+=back
+
+=head2 Additional Options
+
+=over 2
+
+=item -t, --tree
+
+Name of the tree that will be optimized. Otherwise all trees in the
+database will be optimized.
+
+=item -q, --quiet
+
+Run the program in quiet mode.
+
+=item --verbose
+
+Execute the program in verbose mode.
+
+=back
+
+=head2 Additional Information
+
+=over 2
+
+=item --version
+
+Show the program version.   
+
+=item --usage      
+
+Show program usage statement.
+
+=item --help
+
+Show a short help message.
+
+=item --man
+
+Show the full program manual.
+
+=back
+
+=head1 EXAMPLES
+
+B<Optimize a single tree>
+
+The following command options would optimize the tree named MyTree in the
+biosql database.
+
+    phyopt.pl -d 'DBI:mysql:database=biosql;host=localhost'
+              -u name -p password -t MyTree
+
+B<Optimize entire database>
+
+The following commmand options would optimize all of the individual
+trees in the database named Angio.
+
+    phyopt.pl -d 'DBI:mysql:database=Angio;host=localhost'
+              -u name -p password
+
+This could also be done by passing the individual components for
+connecting to the database.
+
+    phyopt.pl --driver mysql --database Angio --host localhost
+              -u name -p password
+
+=head1 DIAGNOSTICS
+
+The error messages below are followed by descriptions of the error
+and possible solutions.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Many of the options passed at the command line can be set as 
+options in the user's environment. 
+
+=over 2
+
+=item DBI_USER
+
+User name to connect to the database.
+
+=item DBI_PASSWORD
+
+Password for the database connection
+
+=item DBI_DSN
+
+DSN for database connection.
+
+=back
+
+For example in the bash shell this would be done be editing your .bashrc file
+to contain:
+
+    export DBI_USER=yourname
+    export DBI_PASS=yourpassword
+    export DBI_DSN='DBI:mysql:database=biosql;host-localhost'
+
+=head1 DEPENDENCIES
+
+The phyimport.pl program is dependent on the following Perl modules:
+
+=over2
+
+=item DBI - L<http://dbi.perl.org>
+
+The PERL Database Interface (DBI) module allows for connections 
+to multiple databases.
+
+=item DBD:MySQL - 
+L<http://search.cpan.org/~capttofu/DBD-mysql-4.005/lib/DBD/mysql.pm>
+
+MySQL database driver for DBI module.
+
+=item DBD:Pg -
+L<http://search.cpan.org/~rudy/DBD-Pg-1.32/Pg.pm>
+
+PostgreSQL database driver for the DBI module.
+
+=item Getopt::Long - L<http://perldoc.perl.org/Getopt/Long.html>
+
+The Getopt module allows for the passing of command line options
+to perl scripts.
+
+=item Bio::Tree - L<http://www.bioperl.org>
+
+The Bio::Tree module is part of the bioperl package.
+
+=back
+
+A RDBMS is also required. This can be one of:
+
+=over 2
+
+=item MySQL - L<http://www.mysql.com>
+
+=item PostgreSQL - L<http://www.postgresql.org>
+
+=back
+
+=head1 BUGS AND LIMITATIONS
+
+Known limitations:
+
+=over2
+
+=item *
+Currently only stable with the MySQL Database driver.
+
+=item *
+DSN string must currently be in the form:
+DBI:mysql:database=biosql;host=localhost
+
+=back
+
+Please report additional problems to 
+James Estill E<lt>JamesEstill at gmail.comE<gt>
+
+=head1 SEE ALSO
+
+The program phyinit.pl is a component of a package of comand line programs
+for PhyloDB management. Additional programs include:
+
+=over
+
+=item phyinit.pl
+
+Initialize a PhyloDB database.
+
+=item phyimport.pl
+
+Import common phylogenetic file formats.
+
+=item phyexport.pl
+
+Export tree data in PhyloDB to common file formats.
+
+=item phyqry.pl
+
+Return a standard report of information for a given tree.
+
+=item phymod.pl
+
+Modify an existing phylogenetic database by deleting, adding or
+copying branches.
+
+=back
+
+=head1 LICENSE
+
+This program may be used, distributed or modified under the same
+terms as Perl itself. Please consult the Perl Artistic License
+(http://www.perl.com/pub/a/language/misc/Artistic.html) for the
+terms under which you may use, modify, or distribute this script.
+
+THIS SOFTWARE COMES AS IS, WITHOUT ANY EXPRESS OR IMPLIED
+WARRANTY. USE AT YOUR OWN RISK.
+
+=head1 AUTHORS
+
+James C. Estill E<lt>JamesEstill at gmail.comE<gt>
+
+Hilmar Lapp E<lt>hlapp at gmx.netE<gt>
+
+William Piel E<lt>william.piel at yale.eduE<gt>
 
 =head1 HISTORY
 
 Started: 07/04/2007
 
-Updated: 07/20/2007
+Updated: 08/19/2007
 
 =cut
-
-#-----------------------------------------------------------+
-# HISTORY                                                   |
-#-----------------------------------------------------------+
-# 07/04/2007 - JCE
-# - Program started
-# - Started the add_lr_id subfunction to add the left and
-#   right ids
-# 
-# 07/05/2007 - JCE
-# - Had to upgrade MySQL from 4.0 to 4.1 to use nested
-#   SQL statements. This was needed to get the transitive
-#   closure to work.
-# - Added verbose to command line to make work with
-#   tree-precompute from H. Lapp
-# 
-# 07/20/2007
-# - Added help, man, version, and usage to command line
-#   options.
-# - Added print_help subfunction
