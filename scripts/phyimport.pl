@@ -802,7 +802,7 @@ with the above variables by simply typing phyinit.pl at the command line.
 
 The phyimport.pl program is dependent on the following PERL modules:
 
-=over2
+=over 2
 
 =item DBI - L<http://dbi.perl.org>
 
@@ -844,7 +844,7 @@ A RDBMS is also required. This can be one of:
 
 Known limitations:
 
-=over2
+=over 2
 
 =item *
 Currently only stable with the MySQL Database driver.
