@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 07/06/2007                                       |
-# UPDATED: 07/09/2007                                       |
+# UPDATED: 09/20/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Modify trees in the PhyloDb database.                    |
@@ -20,7 +20,13 @@
 #                                                           |
 #-----------------------------------------------------------+
 # TO DO:
-# - Update POD documentation
+# - Add some safety scissors ... curently the cut command completely
+#   deletes the records, it would be good to move these to a temporary
+#   table so that they could be recovered with and Undelete
+# - Copy and paste command
+#   Simply move edge and run phyopt on the two trees affected
+# - Cut and paste command
+#   If temp table working, then move these over, 
  
 print "Staring $0 ..\n";
 
@@ -1126,27 +1132,37 @@ This documentation refers to phymod.pl version 1.0.
 
 =head1 SYNOPSIS
 
-  Usage: phyexport.pl
-        --dsn        # The DSN string the database to connect to
-                     # Must conform to:
-                     # 'DBI:mysql:database=biosql;host=localhost' 
-        --outfile    # Full path to output file that will be created.
+  Usage: phymod.pl
+
+    REQUIRED ARGUMENTS:
+        --dsn        # The DSN string for the DB connection
         --dbuser     # User name to connect with
-        --dbpass     # Password to connect with
-        --dbname     # Name of database to use
-        --driver     # "mysql", "Pg", "Oracle" (default "mysql")
-        --host       # optional: host to connect with
-        --cut        # Node to cut
-        --copy       # Node to copy
-        --paste      # Node to paste
-        --help       # Print this help message
-        --quiet      # Run the program in quiet mode.
+        --dbpass     # User password to connect with
+        --infile     # Full path to the tree file to import to the db
         --format     # "newick", "nexus" (default "newick")
-        --tree       # Name of the tree to export
+    ALTERNATIVE TO --dsn:
+        --driver     # DB Driver "mysql", "Pg", "Oracle" 
+        --dbname     # Name of database to use
+        --host       # Host to connect with (ie. localhost)
+    ADDITIONAL OPTIONS:
+        --tree       # Tree name to use
+        --quiet      # Run the program in quiet mode.
+	--verbose    # Run the program in verbose mode.
+    ADDITIONAL INFORMATION:
+        --version    # Show the program version     
+	--usage      # Show program usage
+        --help       # Print short help message
+	--man        # Open full program manual
 
 =head1 DESCRIPTION
 
-Export a phylodb Tree to a specified output format.
+Modify trees in a PhyloDB database. Since the current version of the program
+requires that node IDs be passed, the names of the trees do not need to be
+passed to the program. The down side is that you must know the unique ID
+for the name used by the database. These can be obtained by running the
+phyexport command with the ____ option. This will produce a tree
+with nodes labeled by the name given in the original tree, as well as the
+node ids used in the database.
 
 =head1 COMMAND LINE ARGUMENTS
 
@@ -1178,8 +1194,9 @@ the user is prompted.
 
 =item -x, --cut-node
 
-The source node that will be cut from. When passed witout a paste
-the data will be deleted from the database.
+The source node that will be cut from the tree. When passed witout a paste
+the data will be deleted from the database. B<There is currently no
+way to undelete a node that was cut.>
 
 =item -c, --copy-node
 
