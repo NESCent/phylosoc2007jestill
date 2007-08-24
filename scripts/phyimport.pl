@@ -351,10 +351,13 @@ while( $tree = $tree_in->next_tree ) {
 		    
 		    # Print output, node ids printed below
 		    # should match the integer ids used in the database
-		    print "\t".$anc->id;
-		    print "-->";
-		    print $ind_node->id;
-		    print "\n";
+		    # Only do this if verbose
+		    if $verbose {
+			print "\t".$anc->id;
+			print "-->";
+			print $ind_node->id;
+			print "\n";
+		    } # End of if verbose
 
 		} # End of if ancestor has id 
 	    } # End of if the node has an ancestor
