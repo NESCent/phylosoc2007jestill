@@ -22,6 +22,7 @@
 #   the query root.
 # - Write to STDOUT when an outfile path is not specified.
 # - Add support for quiet option
+# - Clean out code not currently being used
 
 #Package this as PhyloDB for now
 package PhyloDB;
@@ -920,4 +921,3 @@ Started: 07/11/2007
 Updated: 08/24/2007
 
 =cut
-
