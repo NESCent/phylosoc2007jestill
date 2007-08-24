@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 07/11/2007                                       |
-# UPDATED: 09/19/2007                                       |
+# UPDATED: 08/24/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Create a standard report for the entire database, or a   |
@@ -152,14 +152,17 @@ unless ($dsn) {
     ($cruft, $host) = split(/=/,$prehost);
 
     # Print for debug
-    print "\tDSN:\t$dsn\n";
-    print "\tPRE:\t$prefix\n";
-    print "\tDRIVER:\t$driver\n";
-    print "\tSUF:\t$suffix\n";
-    print "\tDB:\t$db\n";
-    print "\tHOST:\t$host\n";
-    # The following not required
-    print "\tTREES\t$tree_name\n" if $tree_name;
+    if ($verbose) {
+	print "\tDSN:\t$dsn\n";
+	print "\tPRE:\t$prefix\n";
+	print "\tDRIVER:\t$driver\n";
+	print "\tSUF:\t$suffix\n";
+	print "\tDB:\t$db\n";
+	print "\tHOST:\t$host\n";
+	# The following not required
+	print "\tTREES\t$tree_name\n" if $tree_name;
+    }
+
 }
 
 
@@ -183,8 +186,19 @@ unless ($pass) {
 #-----------------------------+
 # CONNECT TO THE DATABASE     |
 #-----------------------------+
-# Commented out while I work on fetching tree structure
 my $dbh = &connect_to_db($dsn, $usrname, $pass);
+
+#-----------------------------+
+# OPEN OUTFILE                |
+#-----------------------------+
+if ($outfile) {
+    open (OUT, ">$outfile") ||
+	die "Can not open outfile:\n$outfile\n";
+}
+else {
+    print "\nAn outfile must be specified.\n";
+    print_help("");
+}
 
 #-----------------------------+
 # EXIT HANDLER                |
@@ -219,25 +233,20 @@ my $sel_attrs = &prepare_sth($dbh,
 			     ."WHERE t.term_id = eav.term_id "
 			     ."AND eav.edge_id = ?");
 
-# Currently doing the following as a fetch_node_label subfunction 
-## Select the node label 
-#my $sel_label = &prepare_sth($dbh,
-#			     "SELECT label FROM node WHERE node_id = ?");
-
 #-----------------------------+
 # GET THE TREES TO PROCESS    |
 #-----------------------------+
-# Check to see if the tree does exist in the database
-# throw error message if it does not
+# TODO: Check to see if the tree does exist in the database
+#       throw error message if it does not
 
 # Multiple trees can be passed in the command lined
 # we therefore need to split tree name into an array
 if ($tree_name) {
     @trees = split( /\,/ , $tree_name );
-} else {
-    print "No tree name issued at the command line.\n";
+} 
+else {
+    print "No tree name issued at the command line.\n" if $verbose;
 }
-
 
 if (! (@trees && $trees[0])) {
     @trees = ();
@@ -247,185 +256,50 @@ if (! (@trees && $trees[0])) {
     }
 }
 
-
-# Add warning here to tell the user how many trees will be 
-# created if a single tree was not specified
+# TODO: Add warning here to tell the user how many trees will be 
+#       reported on if a single tree was not specified
 
 
 ## SHOW THE TREES THAT WILL BE PROCESSED
 my $num_trees = @trees;
-print "TREES TO EXPORT ($num_trees)\n";
+print OUT "TREES TO REPORT ($num_trees)\n";
 foreach my $IndTree (@trees) {
-    print "\t$IndTree\n";
+    print OUT "\t$IndTree\n";
 }
 
 #-----------------------------------------------------------+
 # FOR EACH INDIVIDUAL TREE IN THE TREES LIST                | 
 #-----------------------------------------------------------+
 foreach my $ind_tree (@trees) {
-
-    #-----------------------------+
-    # CREATE A NEW TREE OBJECT    |
-    #-----------------------------+
-    print "\tCreating a new tree object.\n";
-    $tree = new Bio::Tree::Tree() ||
-	die "Can not create the tree object.\n";
-
-
-    #///////////////////////////////////////////////////
-    # WORKING HERE
-    # TRYING TO DEFINE ROOT AS THE 
-    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     
-    if ($parent_node) {
-	# Set the root to the parent node passed at cmd line
-	$root->[0] = $parent_node;
+
+    print OUT "\n========================================\n";
+    print OUT "\ TREE: $ind_tree\n";
+    print OUT "========================================\n";
+    my $tree_id = fetch_tree_id($dbh,$ind_tree);
+    print OUT "TREE ID:\t$tree_id\n";
+
+    my $num_leaf_nodes = count_leaf_nodes($dbh,$tree_id);
+    print OUT "LEAF NODES:\t$num_leaf_nodes\n";
+
+    my $root_node_id = fetch_root_node_id($dbh,$tree_id);
+    print OUT "ROOT NODE ID:\t$root_node_id\n";
+
+    my @leaf_node_ids = fetch_leaf_nodes($dbh,$tree_id);
+
+    print OUT "LEAF NODES:\n";
+    for my $leaf_node_id (@leaf_node_ids) {
+	my $node_label = fetch_node_label ($dbh, $leaf_node_id);
+
+	print OUT "\t$leaf_node_id\t$node_label\n";
+
     }
-    else {
-	# Get the root to the entire tre
-	execute_sth($sel_root, $ind_tree);
-	$root = $sel_root->fetchrow_arrayref;
-    }
-
-
-    if ($root) {
-	print "\nProcessing tree: $ind_tree \n";
-	#print "\tRoot Node: ".$root->[0]."\n";
-	
-	# ADD THE ROOT NODE TO THE TREE OBJECT
-	my $node = new Bio::Tree::Node( '-id' => $root->[0]);
-	$tree->set_root_node($node);
-	
-	# test of find node here, this appears to work 06/22/2007
-	my @par_node = $tree->find_node( -id => $root->[0] );
-	my $num_par_nodes = @par_node;
-	
-    } 
-    else {
-	print STDERR "no tree with name '$ind_tree'\n";
-	next;
-    }
-
-    #-----------------------------+
-    # LOAD TREE NODES             |
-    #-----------------------------+
-    # This will need to load the tree nodes to the tre1e object
-    #&load_tree_nodes($sel_chld,$root,$sel_attrs, $tree);
-    &load_tree_nodes($sel_chld,$root,$sel_attrs);
-
-    #-----------------------------+
-    # LOAD NODE VARIABLES         | 
-    #-----------------------------+
-    # At this point, all of the nodes should be loaded to the tree object
-    my @all_nodes = $tree->get_nodes;
-    
-    foreach my $ind_node (@all_nodes) {
-	
-        &execute_sth($sel_attrs,$ind_node);
-	
-        my %attrs = ();
-
-        while (my $row = $sel_attrs->fetchrow_arrayref) {
-            $attrs{$row->[0]} = $row->[1];
-        }
-
-	#-----------------------------+
-	# BOOTSTRAP                   |
-	#-----------------------------+
-	# Example of adding the boostrap info
-	#$ind_node->bootstrap('99');
-	# Example of fetching support value from the attrs
-        #$attrs{'support value'} if $attrs{'support value'};
-	if ( $attrs{'support value'} ) {
-	    #print "\t\tSUP:".$attrs{'support value'}."\n";
-	    $ind_node->bootstrap( $attrs{'support value'} );
-	}
-	
-	#-----------------------------+
-	# BRANCH LENGTH               |
-	#-----------------------------+
-	# Example of adding the branch length info 
-	#$ind_node->branch_length('10');
-	# Example of fetching the branch length from the attrs
-        #print ":".$attrs{'branch length'} if $attrs{'branch length'}
-	if ($attrs{'branch length'} ) {
-	    $ind_node->branch_length( $attrs{'branch length'} );
-	}
-
-	#-----------------------------+
-	# SET NODE ID                 |
-	#-----------------------------+
-	# TO DO 
-	# INCLUDE OPTION TO USE DB ID'S FOR INTERNAL NODES
-	# If null in the original tree, put null here
-	#my $sql = "SELECT label FROM node WHERE node_id = $ind_node";
-	
-	if ($show_node_id) {
-
-	    my $node_label = fetch_node_label($dbh, $ind_node->id());
-	    
-	    # If a node label exists in the database, show the 
-	    # database node id in parenthesis
-	    if ($node_label) {
-		# At this point the node id in the database is saved
-		# as $ind_node->id, the node label from the original
-		# tree is stored as $node_label
-		my $new_node_id = $node_label."_node_".$ind_node->id;
-		$ind_node->id($new_node_id);
-	    }
-	}
-	else {
-	    
-	    # Otherwise overwrite the node id with the value in
-	    # the node_label field of the node table
-	    my $node_label = fetch_node_label($dbh, $ind_node->id());
-	    
-	    if ($node_label) {
-		$ind_node->id($node_label);
-	    } else {
-		$ind_node->id('');
-	    }
-
-	} # End of  if show_node_id
-	
-    }
-    
-    #-----------------------------+
-    # EXPORT TREE FORMAT          |
-    #-----------------------------+
-    # The following two lines used for code testing
-    #my $treeio = new Bio::TreeIO( '-format' => $format );
-    #print "OUTPUT TREE AS $format:\n";
-    my $treeio = Bio::TreeIO->new( -format => $format,
-				   -file => '>'.$outfile)
-	|| die "Could not open output file:\n$outfile\n";
-    
-    
-    # The following code writes the tree out to the STDOUT
-    my $treeout_here = Bio::TreeIO->new( -format => $format );
-    
-    $treeout_here->write_tree($tree); 
-
-
-    $treeio->write_tree($tree);
-
-#    # The follwoing writes the code to the output file
-#    # but for some reason it does not return true ..
-#    if ( $treeio->write_tree($tree) ) {
-#	print "\tTree exported to:\n\t$outfile\n";
-#    };
-    
-#    $treeio->write_tree($PhyloDB::tree) ||
-#	die "Cound not write tree to output file.";
-
-#    print "\tTree exported to:\n\t$outfile\n";
-    
 
 } # End of for each tree
 
 
 # End of program
-print "\n$0 has finished.\n";
+print "\n$0 has finished.\n" if $verbose;
 
 exit;
 
@@ -569,8 +443,6 @@ sub execute_sth {
 
 sub last_insert_id {
 
-    #my ($dbh,$table_name,$driver) = @_;
-    
     # The use of last_insert_id assumes that the no one
     # is interleaving nodes while you are working with the db
     my $dbh = shift;
@@ -608,6 +480,77 @@ sub parse_dsn {
     return ($scheme, $driver, $attr, $attr_hash, $dsn);
 }
 
+sub count_leaf_nodes {
+    
+    my ($dbh, $tree_id) = @_;
+    my ($sql, $cur, $result, @row);
+
+    $sql = "SELECT COUNT(*) FROM node WHERE(right_idx-left_idx) = 1".
+	" AND tree_id=\'$tree_id\'";
+    $cur = $dbh->prepare($sql);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    $result=$row[0];
+    $cur->finish();
+    
+    return $result;
+    
+}
+
+sub fetch_leaf_nodes {
+
+    # Fetch the ids of the leaf nodes
+    my ($dbh, $tree_id) = @_;
+    my ($sth, $sql, $cur, $result, @row, @nodes);
+   
+    $sql = "SELECT node_id FROM node WHERE(right_idx-left_idx) = 1".
+	" AND tree_id=\'$tree_id\'";
+    $sth = $dbh->prepare($sql);
+    $sth->execute();
+    
+    while (my $r = $sth->fetchrow_arrayref) {
+	$result = @$r[0];
+	push (@nodes,$result);
+    }
+
+    return @nodes;
+
+}
+
+sub fetch_tree_id {
+    
+    #my $result = 0;
+    my ($dbh, $tree_name) = @_;
+    my ($sql, $cur, $result, @row);
+   
+    $sql = "SELECT tree_id FROM tree WHERE name =\'".$tree_name."\'";
+    $cur = $dbh->prepare($sql);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    $result=$row[0];
+    $cur->finish();
+
+    return $result;
+
+}
+
+sub fetch_root_node_id {
+
+    #my $result = 0;
+    my ($dbh, $tree_id) = @_;
+    my ($sql, $cur, $result, @row);
+   
+    $sql = "SELECT node_id FROM node WHERE left_idx=\'1\'".
+	" AND tree_id=\'$tree_id\'";
+    $cur = $dbh->prepare($sql);
+    $cur->execute();
+    @row=$cur->fetchrow;
+    $result=$row[0];
+    $cur->finish();
+
+    return $result;
+
+}
 
 sub print_help {
 
@@ -616,23 +559,30 @@ sub print_help {
     my ($opt) = @_;
 
     my $usage = "USAGE:\n". 
-	"  phyqry.pl -i InFile -o OutFile";
-    my $args = "REQUIRED ARGUMENTS:\n".
-	"  --dsn          # Not really. just here for now.\n".
-	"\n".
-	"OPTIONS:\n".
-	"  --dbname       # Name of the database to connect to\n".
-	"  --host         # Database host\n".
-	"  --driver       # Driver for connecting to the database\n".
-	"  --dbuser       # Name to log on to the database with\n".
-	"  --dbpass       # Password to log on to the database with\n".
-	"  --tree         # Name of the tree to optimize\n".
-	"  --version      # Show the program version\n".     
-	"  --usage        # Show program usage\n".
-	"  --help         # Show this help message\n".
-	"  --man          # Open full program manual\n".
-	"  --verbose      # Run the program with maximum output\n". 
-	"  --quiet        # Run program with minimal output\n";
+	"  phyreport.pl -o PhyloDBReport.txt";
+    my $args = 
+	"REQUIRED ARGUMENTS:\n".
+        "    --dsn         # The DSN string the database to connect to\n".
+	"                  # Must conform to:\n".
+	"                  # \'DBI:mysql:database=biosql;host=localhost\'\n".
+        "    --dbuser      # User name to connect with\n".
+        "    --dbpass      # Password to connect with\n".
+        "    --outfile     # Full path to output file that will be created.\n".
+	"ALTERNATIVE TO --dsn:\n".
+        "    --driver      # DB Driver \"mysql\", \"Pg\", \"Oracle\"\n". 
+        "    --dbname      # Name of database to use\n".
+        "    --host        # Host to connect with (ie. localhost)\n".
+	"ADDITIONAL OPTIONS:\n".
+        "    --tree        # Name of the tree to report on\n".
+        "                  # Otherwise generate report for all trees\n".
+        "    --quiet       # Run the program in quiet mode.\n".
+	"    --verbose     # Run the program in verbose mode.\n".
+	"ADDITIONAL INFORMATION:\n".
+        "    --version     # Show the program version\n".     
+	"    --usage       # Show program usage\n".
+        "    --help        # Print short help message\n".
+	"    --man         # Open full program manual\n";
+
 	
     if ($opt =~ "full") {
 	print "\n$usage\n\n";
@@ -681,7 +631,10 @@ This documentation refers to phyreport version 1.0.
 
 =head1 DESCRIPTION
 
-Generate a summary report for a tree or the entire PhyloDB database.
+Generate a summary report for a tree or the entire PhyloDB database. Not
+a very exciting program, but givies a short overview of the trees that
+are stored in the PhyloDB database. This will only work correctly
+for trees that have been optimized with the phyopt program.
 
 =head1 COMMAND LINE ARGUMENTS
 
@@ -800,7 +753,7 @@ then the following command would yield the same result.
 B<Generate report for a single tree>
 
 The following would generate a report for the tree named cats in the
-database named biosql. The results would be saved to the text file
+database name biosql. The results would be saved to the text file
 CatsReport.txt
 
     phyreport.pl -d 'DBI:mysql:database=biosql;host=localhost'
@@ -951,7 +904,7 @@ William Piel E<lt>william.piel at yale.eduE<gt>
 
 Started: 07/11/2007
 
-Updated: 08/19/2007
+Updated: 08/24/2007
 
 =cut
 
