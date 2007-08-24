@@ -13,13 +13,15 @@
 # DESCRIPTION:                                              | 
 #  Create a standard report for the entire database, or a   |
 #  selected tree within the database. Output will be        |
-#  sent to an output file or to STDOUT.                     |
+#  sent to an output file.                                  |
 #                                                           |
 #-----------------------------------------------------------+
 #
 # TO DO:
 # - Allow for subquery within a tree using an identified node as
 #   the query root.
+# - Write to STDOUT when an outfile path is not specified.
+# - Add support for quiet option
 
 #Package this as PhyloDB for now
 package PhyloDB;
@@ -192,12 +194,8 @@ my $dbh = &connect_to_db($dsn, $usrname, $pass);
 # OPEN OUTFILE                |
 #-----------------------------+
 if ($outfile) {
-    open (OUT, ">$outfile") ||
-	die "Can not open outfile:\n$outfile\n";
-}
-else {
-    print "\nAn outfile must be specified.\n";
-    print_help("");
+    open(STDOUT, ">$outfile") ||
+	die "ERROR: Can not open outfile:\n$outfile\n";
 }
 
 #-----------------------------+
@@ -262,9 +260,9 @@ if (! (@trees && $trees[0])) {
 
 ## SHOW THE TREES THAT WILL BE PROCESSED
 my $num_trees = @trees;
-print OUT "TREES TO REPORT ($num_trees)\n";
+print "TREES TO REPORT ($num_trees)\n";
 foreach my $IndTree (@trees) {
-    print OUT "\t$IndTree\n";
+    print "\t$IndTree\n";
 }
 
 #-----------------------------------------------------------+
@@ -273,25 +271,25 @@ foreach my $IndTree (@trees) {
 foreach my $ind_tree (@trees) {
     
 
-    print OUT "\n========================================\n";
-    print OUT "\ TREE: $ind_tree\n";
-    print OUT "========================================\n";
+    print "\n========================================\n";
+    print "\ TREE: $ind_tree\n";
+    print "========================================\n";
     my $tree_id = fetch_tree_id($dbh,$ind_tree);
-    print OUT "TREE ID:\t$tree_id\n";
+    print "TREE ID:\t$tree_id\n";
 
     my $num_leaf_nodes = count_leaf_nodes($dbh,$tree_id);
-    print OUT "LEAF NODES:\t$num_leaf_nodes\n";
+    print "LEAF NODES:\t$num_leaf_nodes\n";
 
     my $root_node_id = fetch_root_node_id($dbh,$tree_id);
-    print OUT "ROOT NODE ID:\t$root_node_id\n";
+    print "ROOT NODE ID:\t$root_node_id\n";
 
     my @leaf_node_ids = fetch_leaf_nodes($dbh,$tree_id);
 
-    print OUT "LEAF NODES:\n";
+    print "LEAF NODES:\n";
     for my $leaf_node_id (@leaf_node_ids) {
 	my $node_label = fetch_node_label ($dbh, $leaf_node_id);
 
-	print OUT "\t$leaf_node_id\t$node_label\n";
+	print "\t$leaf_node_id\t$node_label\n";
 
     }
 
@@ -763,6 +761,21 @@ CatsReport.txt
 
 The error messages below are followed by descriptions of the error
 and possible solutions.
+
+=over 2
+
+=item B<C<ERROR: Can not open outfile: /some/file/path/outfile.txt>>
+
+B<Description:> The outfile specified at the command line is not
+available to write to. This may possiby be because the file path
+that was specified does not exist.
+
+B<Solution:>It is possible to write the file to the current working
+directory by simply using a file name without a full path. You should
+also check that you have write access to the directory that you
+are trying to write your output file to.
+
+=back
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
