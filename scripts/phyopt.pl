@@ -21,6 +21,7 @@
 #-----------------------------------------------------------+
 #
 # TO DO:
+# - PGSQL support
 # - The internal nodes used by TreeI will not be the same
 #   as the nodes used in the database so the DB ID will
 #   need to be fetched when adding edges to the database.
