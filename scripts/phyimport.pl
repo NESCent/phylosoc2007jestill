@@ -8,7 +8,7 @@
 #  AUTHOR: James C. Estill                                  |
 # CONTACT: JamesEstill_at_gmail.com                         |
 # STARTED: 06/01/2007                                       |
-# UPDATED: 08/17/2007                                       |
+# UPDATED: 09/19/2007                                       |
 #                                                           |
 # DESCRIPTION:                                              | 
 #  Import NEXUS and Newick files from text files to the     |
@@ -22,6 +22,7 @@
 #-----------------------------------------------------------+
 #
 # TO DO:
+# - PGSQL Support
 # - The internal nodes used by TreeI will not be the same
 #   as the nodes used in the database so the DB ID will
 #   need to be fetched when adding edges to the database.
@@ -340,6 +341,7 @@ while( $tree = $tree_in->next_tree ) {
 		    $statement = "INSERT INTO edge".
 			" (parent_node_id, child_node_id)".
 			" VALUES (?,?)";
+
 		    my $edge_sth = &prepare_sth($dbh,$statement);
 		    
 		    execute_sth($edge_sth,
@@ -352,7 +354,8 @@ while( $tree = $tree_in->next_tree ) {
 		    # Print output, node ids printed below
 		    # should match the integer ids used in the database
 		    # Only do this if verbose
-		    if $verbose {
+
+		    if ($verbose) {
 			print "\t".$anc->id;
 			print "-->";
 			print $ind_node->id;
