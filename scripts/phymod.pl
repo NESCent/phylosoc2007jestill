@@ -20,6 +20,7 @@
 #                                                           |
 #-----------------------------------------------------------+
 # TO DO:
+# - PGSQL support
 # - Add some safety scissors ... curently the cut command completely
 #   deletes the records, it would be good to move these to a temporary
 #   table so that they could be recovered with and Undelete
