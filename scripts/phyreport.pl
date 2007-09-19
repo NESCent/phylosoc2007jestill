@@ -18,6 +18,7 @@
 #-----------------------------------------------------------+
 #
 # TO DO:
+# - PGSQL support
 # - Allow for subquery within a tree using an identified node as
 #   the query root.
 # - Write to STDOUT when an outfile path is not specified.
