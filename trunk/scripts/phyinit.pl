@@ -27,6 +27,8 @@
 # WARRANTY. USE AT YOUR OWN RISK.
 
 # TO DO:
+# - Add STDERR to error info print statements
+# - PGSQL support
 # - Create the non-phylo tables components of BioSQL
 # - Run appropriate SQL code in sqldir if desired
 #   Can run system cmd like
